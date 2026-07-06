@@ -7,6 +7,7 @@ import { employeesApi, attendanceApi } from '../api';
 export default function CheckInPage() {
   const [employees, setEmployees] = useState([]);
   const [recognizedEmployee, setRecognizedEmployee] = useState(null);
+  const [employeeStatus, setEmployeeStatus] = useState(null);
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [modelsLoaded, setModelsLoaded] = useState(false);
@@ -120,6 +121,13 @@ export default function CheckInPage() {
           if (employee) {
             stopDetection();
             setRecognizedEmployee(employee);
+            // Get status to show entry time if already registered today
+            try {
+              const status = await attendanceApi.getEmployeeStatus(employee.id);
+              setEmployeeStatus(status);
+            } catch (e) {
+              setEmployeeStatus(null);
+            }
           }
         }
       }
@@ -143,15 +151,37 @@ export default function CheckInPage() {
         photo_snapshot,
       });
 
+      // Get today's records for summary
+      let todayEntry = null;
+      let todayExit = null;
+      try {
+        const status = await attendanceApi.getEmployeeStatus(recognizedEmployee.id);
+        if (status && status.last_record) {
+          // Fetch full history for today to get entry and exit times
+          const today = new Date().toISOString().split('T')[0];
+          const history = await attendanceApi.getHistory({
+            employee_id: recognizedEmployee.id,
+            start_date: today,
+            end_date: today,
+          });
+          todayEntry = history.find(r => r.type === 'entry');
+          todayExit = history.find(r => r.type === 'exit');
+        }
+      } catch (e) {
+        // Non-critical, just skip summary
+      }
+
       setMessage({
         type: 'success',
         actionType: type,
         employee: `${recognizedEmployee.first_name} ${recognizedEmployee.last_name}`,
         time: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
+        todayEntry: todayEntry ? new Date(todayEntry.timestamp).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : null,
+        todayExit: todayExit ? new Date(todayExit.timestamp).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : null,
       });
 
       setRecognizedEmployee(null);
-      setTimeout(() => setMessage(null), 5000);
+      setTimeout(() => setMessage(null), 6000);
     } catch (err) {
       setMessage({ type: 'error', text: err.message });
       setTimeout(() => setMessage(null), 4000);
@@ -162,6 +192,7 @@ export default function CheckInPage() {
 
   function cancelRecognition() {
     setRecognizedEmployee(null);
+    setEmployeeStatus(null);
   }
 
   const videoConstraints = {
@@ -187,18 +218,49 @@ export default function CheckInPage() {
                 message.actionType === 'entry' ? 'bg-emerald-100' : 'bg-orange-100'
               }`}>
                 {message.actionType === 'entry' ? (
-                  <CheckCircle className="w-14 h-14 text-emerald-600" />
+                  <LogIn className="w-14 h-14 text-emerald-600" />
                 ) : (
                   <LogOut className="w-14 h-14 text-orange-600" />
                 )}
               </div>
-              <p className={`text-3xl font-bold mb-3 ${
+
+              <p className={`text-3xl font-bold mb-2 ${
                 message.actionType === 'entry' ? 'text-emerald-700' : 'text-orange-700'
               }`}>
                 {message.actionType === 'entry' ? '¡Ingreso Registrado!' : '¡Salida Registrada!'}
               </p>
-              <p className="text-xl text-gray-700 mb-2">{message.employee}</p>
-              <p className="text-lg text-gray-400">{message.time} hrs</p>
+
+              <p className="text-xl text-gray-700 mb-4">{message.employee}</p>
+
+              {/* Resumen del día */}
+              <div className="bg-gray-50 rounded-2xl p-4 mt-4 space-y-2">
+                {message.actionType === 'entry' ? (
+                  <div className="flex items-center justify-center gap-2 text-gray-600">
+                    <LogIn className="w-5 h-5 text-emerald-500" />
+                    <span>Tu ingreso hoy: <strong>{message.time} hrs</strong></span>
+                  </div>
+                ) : (
+                  <>
+                    {message.todayEntry && (
+                      <div className="flex items-center justify-center gap-2 text-gray-600">
+                        <LogIn className="w-5 h-5 text-emerald-500" />
+                        <span>Ingreso: <strong>{message.todayEntry} hrs</strong></span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-center gap-2 text-gray-600">
+                      <LogOut className="w-5 h-5 text-orange-500" />
+                      <span>Salida: <strong>{message.time} hrs</strong></span>
+                    </div>
+                    {message.todayEntry && (
+                      <p className="text-sm text-gray-400 mt-2 pt-2 border-t border-gray-200">
+                        ¡Buen trabajo hoy! 🙌
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <p className="text-sm text-gray-400 mt-6">Volviendo al inicio...</p>
             </>
           ) : (
             <>
@@ -244,6 +306,17 @@ export default function CheckInPage() {
               Hola, {recognizedEmployee.first_name} 👋
             </p>
             <p className="text-gray-500">¿Qué deseas registrar?</p>
+            {/* Show current status */}
+            {employeeStatus && employeeStatus.status === 'present' && employeeStatus.last_record && (
+              <p className="text-sm text-emerald-600 mt-2 bg-emerald-50 inline-block px-3 py-1 rounded-full">
+                Ingresaste hoy a las {new Date(employeeStatus.last_record.timestamp).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })} hrs
+              </p>
+            )}
+            {employeeStatus && employeeStatus.status === 'exited' && (
+              <p className="text-sm text-orange-600 mt-2 bg-orange-50 inline-block px-3 py-1 rounded-full">
+                Ya registraste salida hoy
+              </p>
+            )}
           </div>
 
           {/* Botones INGRESO / SALIDA */}
