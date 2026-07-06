@@ -50,11 +50,8 @@ export default function KioskLayout() {
       {/* Header ARM GLOBAL */}
       <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary-700 rounded-xl flex items-center justify-center">
-            <span className="text-white font-bold text-sm">AG</span>
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">ARM GLOBAL</h1>
+          <img src="/logo-armglobal.svg" alt="ARM Global" className="h-8" />
+          <div className="border-l border-gray-200 pl-3">
             <p className="text-xs text-gray-500">Sistema de Registro de Asistencia</p>
           </div>
         </div>

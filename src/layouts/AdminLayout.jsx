@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom';
-import { Camera, Users, ClipboardList, BarChart3, LogOut } from 'lucide-react';
+import { Users, ClipboardList, BarChart3, LogOut, Camera } from 'lucide-react';
 import EmployeesPage from '../pages/EmployeesPage';
 import AttendancePage from '../pages/AttendancePage';
 import DashboardPage from '../pages/DashboardPage';
@@ -25,11 +25,8 @@ export default function AdminLayout() {
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary-600 rounded-xl flex items-center justify-center">
-            <Camera className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">Control de Asistencia</h1>
+          <img src="/logo-armglobal.svg" alt="ARM Global" className="h-8" />
+          <div className="border-l border-gray-200 pl-3">
             <p className="text-xs text-gray-500">Panel Administrador</p>
           </div>
         </div>
