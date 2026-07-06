@@ -244,6 +244,14 @@ export default function CheckInPage() {
     resetFlow();
   }
 
+  // Auto-return to home if employee already completed their day
+  useEffect(() => {
+    if (step === STEP_RECOGNIZED && employeeStatus?.status === 'exited') {
+      const timer = setTimeout(() => resetFlow(), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [step, employeeStatus]);
+
   const videoConstraints = {
     width: 640,
     height: 480,
@@ -397,7 +405,7 @@ export default function CheckInPage() {
             )}
             {employeeStatus?.status === 'exited' && (
               <p className="text-sm text-orange-600 mt-3 bg-orange-50 inline-block px-3 py-1.5 rounded-full">
-                ✓ Ya completaste tu jornada hoy
+                ✓ Ya completaste tu jornada hoy — volviendo al inicio...
               </p>
             )}
           </div>
