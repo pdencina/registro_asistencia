@@ -1,17 +1,15 @@
-import { getDb } from '../lib/db.js';
-import { corsHeaders, handleCors } from '../lib/cors.js';
+const { getDb } = require('../lib/db');
+const { corsHeaders, handleCors } = require('../lib/cors');
 
-export default async function handler(req) {
-  const cors = handleCors(req);
-  if (cors) return cors;
+module.exports = async function handler(req, res) {
+  if (handleCors(req, res)) return;
 
   if (req.method !== 'GET') {
-    return new Response('Method not allowed', { status: 405, headers: corsHeaders() });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   const sql = getDb();
-  const url = new URL(req.url);
-  const date = url.searchParams.get('date') || new Date().toISOString().split('T')[0];
+  const date = req.query.date || new Date().toISOString().split('T')[0];
 
   try {
     const [totalEmployees] = await sql('SELECT COUNT(*) as count FROM employees WHERE active = true');
@@ -41,20 +39,15 @@ export default async function handler(req) {
     const present = Number(presentToday?.count || 0);
     const exited = Number(exitedToday?.count || 0);
 
-    return new Response(JSON.stringify({
+    return res.status(200).json({
       date,
       total_employees: total,
       present_today: present,
       exited_today: exited,
       absent: total - present,
       last_records: lastRecords
-    }), {
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-    });
+    return res.status(500).json({ error: error.message });
   }
-}
+};

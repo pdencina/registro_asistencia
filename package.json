@@ -1,7 +1,6 @@
 {
   "name": "reloj-control-ipad",
   "version": "1.0.0",
-  "type": "module",
   "description": "Sistema de control de asistencia con registro visual para iPad - Vercel + Neon + Blob",
   "private": true,
   "scripts": {

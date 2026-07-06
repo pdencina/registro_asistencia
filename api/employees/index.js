@@ -1,18 +1,15 @@
-import { getDb } from '../lib/db.js';
-import { corsHeaders, handleCors } from '../lib/cors.js';
-import { put } from '@vercel/blob';
+const { getDb } = require('../lib/db');
+const { corsHeaders, handleCors } = require('../lib/cors');
+const { put } = require('@vercel/blob');
 
-export default async function handler(req) {
-  const cors = handleCors(req);
-  if (cors) return cors;
+module.exports = async function handler(req, res) {
+  if (handleCors(req, res)) return;
 
-  const url = new URL(req.url);
   const sql = getDb();
 
   try {
     if (req.method === 'GET') {
-      const search = url.searchParams.get('search');
-      const active = url.searchParams.get('active');
+      const { search, active } = req.query;
 
       let query = 'SELECT * FROM employees WHERE 1=1';
       const params = [];
@@ -33,32 +30,21 @@ export default async function handler(req) {
       query += ' ORDER BY last_name, first_name';
       const rows = await sql(query, params);
 
-      return new Response(JSON.stringify(rows), {
-        headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-      });
+      return res.status(200).json(rows);
     }
 
     if (req.method === 'POST') {
-      const body = await req.json();
-      const { rut, first_name, last_name, department, position, photo } = body;
+      const { rut, first_name, last_name, department, position, photo } = req.body;
 
       if (!rut || !first_name || !last_name) {
-        return new Response(JSON.stringify({ error: 'RUT, nombre y apellido son obligatorios' }), {
-          status: 400,
-          headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-        });
+        return res.status(400).json({ error: 'RUT, nombre y apellido son obligatorios' });
       }
 
-      // Check duplicado
       const existing = await sql('SELECT id FROM employees WHERE rut = $1', [rut]);
       if (existing.length > 0) {
-        return new Response(JSON.stringify({ error: 'Ya existe un empleado con ese RUT' }), {
-          status: 409,
-          headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-        });
+        return res.status(409).json({ error: 'Ya existe un empleado con ese RUT' });
       }
 
-      // Subir foto a Vercel Blob si viene
       let photo_url = null;
       if (photo) {
         const buffer = base64ToBuffer(photo);
@@ -79,27 +65,16 @@ export default async function handler(req) {
       );
 
       const [employee] = await sql('SELECT * FROM employees WHERE id = $1', [id]);
-      return new Response(JSON.stringify(employee), {
-        status: 201,
-        headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-      });
+      return res.status(201).json(employee);
     }
 
-    return new Response('Method not allowed', { status: 405, headers: corsHeaders() });
+    return res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-    });
+    return res.status(500).json({ error: error.message });
   }
-}
+};
 
 function base64ToBuffer(base64) {
   const data = base64.replace(/^data:image\/\w+;base64,/, '');
-  const binaryString = atob(data);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
+  return Buffer.from(data, 'base64');
 }

@@ -1,39 +1,28 @@
-import { getDb } from '../lib/db.js';
-import { corsHeaders, handleCors } from '../lib/cors.js';
-import { put } from '@vercel/blob';
+const { getDb } = require('../lib/db');
+const { corsHeaders, handleCors } = require('../lib/cors');
+const { put } = require('@vercel/blob');
 
-export default async function handler(req) {
-  const cors = handleCors(req);
-  if (cors) return cors;
+module.exports = async function handler(req, res) {
+  if (handleCors(req, res)) return;
 
-  const url = new URL(req.url);
-  const id = url.pathname.split('/').pop();
+  const { id } = req.query;
   const sql = getDb();
 
   try {
     if (req.method === 'GET') {
       const [employee] = await sql('SELECT * FROM employees WHERE id = $1', [id]);
       if (!employee) {
-        return new Response(JSON.stringify({ error: 'Empleado no encontrado' }), {
-          status: 404,
-          headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-        });
+        return res.status(404).json({ error: 'Empleado no encontrado' });
       }
-      return new Response(JSON.stringify(employee), {
-        headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-      });
+      return res.status(200).json(employee);
     }
 
     if (req.method === 'PUT') {
-      const body = await req.json();
-      const { rut, first_name, last_name, department, position, active, photo } = body;
+      const { rut, first_name, last_name, department, position, active, photo } = req.body;
 
       const [current] = await sql('SELECT * FROM employees WHERE id = $1', [id]);
       if (!current) {
-        return new Response(JSON.stringify({ error: 'Empleado no encontrado' }), {
-          status: 404,
-          headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-        });
+        return res.status(404).json({ error: 'Empleado no encontrado' });
       }
 
       let photo_url = current.photo_url;
@@ -64,34 +53,22 @@ export default async function handler(req) {
       );
 
       const [employee] = await sql('SELECT * FROM employees WHERE id = $1', [id]);
-      return new Response(JSON.stringify(employee), {
-        headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-      });
+      return res.status(200).json(employee);
     }
 
     if (req.method === 'DELETE') {
       const now = new Date().toISOString();
       await sql('UPDATE employees SET active = false, updated_at = $1 WHERE id = $2', [now, id]);
-      return new Response(JSON.stringify({ message: 'Empleado desactivado' }), {
-        headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-      });
+      return res.status(200).json({ message: 'Empleado desactivado' });
     }
 
-    return new Response('Method not allowed', { status: 405, headers: corsHeaders() });
+    return res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-    });
+    return res.status(500).json({ error: error.message });
   }
-}
+};
 
 function base64ToBuffer(base64) {
   const data = base64.replace(/^data:image\/\w+;base64,/, '');
-  const binaryString = atob(data);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
+  return Buffer.from(data, 'base64');
 }

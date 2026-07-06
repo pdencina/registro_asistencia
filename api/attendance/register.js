@@ -1,47 +1,35 @@
-import { getDb } from '../lib/db.js';
-import { corsHeaders, handleCors } from '../lib/cors.js';
-import { put } from '@vercel/blob';
+const { getDb } = require('../lib/db');
+const { corsHeaders, handleCors } = require('../lib/cors');
+const { put } = require('@vercel/blob');
 
-export default async function handler(req) {
-  const cors = handleCors(req);
-  if (cors) return cors;
+module.exports = async function handler(req, res) {
+  if (handleCors(req, res)) return;
 
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405, headers: corsHeaders() });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   const sql = getDb();
 
   try {
-    const { employee_id, type, photo_snapshot, notes } = await req.json();
+    const { employee_id, type, photo_snapshot, notes } = req.body;
 
     if (!employee_id || !type) {
-      return new Response(JSON.stringify({ error: 'employee_id y type son obligatorios' }), {
-        status: 400,
-        headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-      });
+      return res.status(400).json({ error: 'employee_id y type son obligatorios' });
     }
 
     if (!['entry', 'exit'].includes(type)) {
-      return new Response(JSON.stringify({ error: 'type debe ser "entry" o "exit"' }), {
-        status: 400,
-        headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-      });
+      return res.status(400).json({ error: 'type debe ser "entry" o "exit"' });
     }
 
-    // Verificar empleado activo
     const [employee] = await sql('SELECT * FROM employees WHERE id = $1 AND active = true', [employee_id]);
     if (!employee) {
-      return new Response(JSON.stringify({ error: 'Empleado no encontrado o inactivo' }), {
-        status: 404,
-        headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-      });
+      return res.status(404).json({ error: 'Empleado no encontrado o inactivo' });
     }
 
-    // Subir snapshot a Blob
     let snapshot_url = null;
     if (photo_snapshot) {
-      const buffer = base64ToBuffer(photo_snapshot);
+      const buffer = Buffer.from(photo_snapshot.replace(/^data:image\/\w+;base64,/, ''), 'base64');
       const blob = await put(`snapshots/${crypto.randomUUID()}.jpg`, buffer, {
         access: 'public',
         contentType: 'image/jpeg'
@@ -65,24 +53,8 @@ export default async function handler(req) {
       WHERE ar.id = $1
     `, [id]);
 
-    return new Response(JSON.stringify(record), {
-      status: 201,
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-    });
+    return res.status(201).json(record);
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-    });
+    return res.status(500).json({ error: error.message });
   }
-}
-
-function base64ToBuffer(base64) {
-  const data = base64.replace(/^data:image\/\w+;base64,/, '');
-  const binaryString = atob(data);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
-}
+};

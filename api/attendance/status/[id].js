@@ -1,17 +1,14 @@
-import { getDb } from '../../lib/db.js';
-import { corsHeaders, handleCors } from '../../lib/cors.js';
+const { getDb } = require('../../lib/db');
+const { corsHeaders, handleCors } = require('../../lib/cors');
 
-export default async function handler(req) {
-  const cors = handleCors(req);
-  if (cors) return cors;
+module.exports = async function handler(req, res) {
+  if (handleCors(req, res)) return;
 
   if (req.method !== 'GET') {
-    return new Response('Method not allowed', { status: 405, headers: corsHeaders() });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const url = new URL(req.url);
-  const pathParts = url.pathname.split('/');
-  const id = pathParts[pathParts.length - 1];
+  const { id } = req.query;
   const sql = getDb();
 
   try {
@@ -27,18 +24,13 @@ export default async function handler(req) {
     const status = !lastRecord ? 'absent' :
                    lastRecord.type === 'entry' ? 'present' : 'exited';
 
-    return new Response(JSON.stringify({
+    return res.status(200).json({
       employee_id: id,
       status,
       last_record: lastRecord,
       next_action: status === 'present' ? 'exit' : 'entry'
-    }), {
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-    });
+    return res.status(500).json({ error: error.message });
   }
-}
+};

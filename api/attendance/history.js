@@ -1,21 +1,15 @@
-import { getDb } from '../lib/db.js';
-import { corsHeaders, handleCors } from '../lib/cors.js';
+const { getDb } = require('../lib/db');
+const { corsHeaders, handleCors } = require('../lib/cors');
 
-export default async function handler(req) {
-  const cors = handleCors(req);
-  if (cors) return cors;
+module.exports = async function handler(req, res) {
+  if (handleCors(req, res)) return;
 
   if (req.method !== 'GET') {
-    return new Response('Method not allowed', { status: 405, headers: corsHeaders() });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   const sql = getDb();
-  const url = new URL(req.url);
-  const employee_id = url.searchParams.get('employee_id');
-  const start_date = url.searchParams.get('start_date');
-  const end_date = url.searchParams.get('end_date');
-  const type = url.searchParams.get('type');
-  const department = url.searchParams.get('department');
+  const { employee_id, start_date, end_date, type, department } = req.query;
 
   try {
     let query = `
@@ -51,13 +45,8 @@ export default async function handler(req) {
     query += ' ORDER BY ar.timestamp DESC LIMIT 500';
     const records = await sql(query, params);
 
-    return new Response(JSON.stringify(records), {
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-    });
+    return res.status(200).json(records);
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-    });
+    return res.status(500).json({ error: error.message });
   }
-}
+};

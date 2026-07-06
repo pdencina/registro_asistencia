@@ -1,12 +1,11 @@
-import { getDb } from '../lib/db.js';
-import { corsHeaders, handleCors } from '../lib/cors.js';
+const { getDb } = require('../lib/db');
+const { corsHeaders, handleCors } = require('../lib/cors');
 
-export default async function handler(req) {
-  const cors = handleCors(req);
-  if (cors) return cors;
+module.exports = async function handler(req, res) {
+  if (handleCors(req, res)) return;
 
   if (req.method !== 'GET') {
-    return new Response('Method not allowed', { status: 405, headers: corsHeaders() });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   const sql = getDb();
@@ -20,13 +19,8 @@ export default async function handler(req) {
       ORDER BY ar.timestamp DESC
     `);
 
-    return new Response(JSON.stringify(records), {
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-    });
+    return res.status(200).json(records);
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
-    });
+    return res.status(500).json({ error: error.message });
   }
-}
+};
