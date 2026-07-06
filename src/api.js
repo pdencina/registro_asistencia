@@ -1,16 +1,21 @@
 const API_BASE = '/api';
 
 async function request(url, options = {}) {
-  const response = await fetch(`${API_BASE}${url}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-    ...options,
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${url}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    });
+  } catch (err) {
+    throw new Error('Sin conexión a internet. Verifica tu red.');
+  }
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Error de red' }));
+    const error = await response.json().catch(() => ({ error: `Error ${response.status}` }));
     throw new Error(error.error || `Error ${response.status}`);
   }
 

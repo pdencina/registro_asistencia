@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader, MapPinOff } from 'lucide-react';
+import { Loader, MapPinOff, WifiOff } from 'lucide-react';
 import CheckInPage from '../pages/CheckInPage';
 import DeviceActivationPage from '../pages/DeviceActivationPage';
 import { devicesApi } from '../api';
@@ -10,10 +10,23 @@ export default function KioskLayout() {
   const [time, setTime] = useState(new Date());
   const [deviceStatus, setDeviceStatus] = useState('checking'); // checking | authorized | unauthorized | out_of_range
   const [locationInfo, setLocationInfo] = useState(null);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   useEffect(() => {
     const interval = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Listen for online/offline events
+  useEffect(() => {
+    function handleOnline() { setIsOffline(false); }
+    function handleOffline() { setIsOffline(true); }
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   useEffect(() => {
@@ -109,6 +122,14 @@ export default function KioskLayout() {
   // Authorized — show kiosk
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
+      {/* Offline banner */}
+      {isOffline && (
+        <div className="bg-red-600 text-white px-4 py-3 flex items-center justify-center gap-2 text-sm font-medium">
+          <WifiOff className="w-5 h-5" />
+          Sin conexión a internet — Los registros no se pueden guardar
+        </div>
+      )}
+
       {/* Header ARM GLOBAL */}
       <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
