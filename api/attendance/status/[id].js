@@ -1,8 +1,6 @@
 import { getDb } from '../../lib/db.js';
 import { corsHeaders, handleCors } from '../../lib/cors.js';
 
-export const config = { runtime: 'nodejs' };
-
 export default async function handler(req) {
   const cors = handleCors(req);
   if (cors) return cors;
