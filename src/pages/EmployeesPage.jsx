@@ -3,6 +3,63 @@ import { UserPlus, Edit2, Trash2, Camera, X, Search } from 'lucide-react';
 import Webcam from 'react-webcam';
 import { employeesApi } from '../api';
 
+// Formatea RUT con puntos y guión: 12.345.678-9
+function formatRut(value) {
+  let clean = value.replace(/[^0-9kK]/g, '').toUpperCase();
+  if (clean.length === 0) return '';
+  
+  // Separar cuerpo y dígito verificador
+  let dv = clean.slice(-1);
+  let body = clean.slice(0, -1);
+  
+  if (body.length === 0) return clean;
+  
+  // Agregar puntos al cuerpo
+  let formatted = '';
+  let count = 0;
+  for (let i = body.length - 1; i >= 0; i--) {
+    formatted = body[i] + formatted;
+    count++;
+    if (count === 3 && i > 0) {
+      formatted = '.' + formatted;
+      count = 0;
+    }
+  }
+  
+  return formatted + '-' + dv;
+}
+
+// Valida RUT chileno con módulo 11
+function validateRut(rut) {
+  const clean = rut.replace(/[.\-]/g, '').toUpperCase();
+  if (clean.length < 2) return false;
+  
+  const body = clean.slice(0, -1);
+  const dv = clean.slice(-1);
+  
+  if (!/^\d+$/.test(body)) return false;
+  
+  let sum = 0;
+  let multiplier = 2;
+  for (let i = body.length - 1; i >= 0; i--) {
+    sum += parseInt(body[i]) * multiplier;
+    multiplier = multiplier === 7 ? 2 : multiplier + 1;
+  }
+  
+  const remainder = 11 - (sum % 11);
+  let expectedDv;
+  if (remainder === 11) expectedDv = '0';
+  else if (remainder === 10) expectedDv = 'K';
+  else expectedDv = String(remainder);
+  
+  return dv === expectedDv;
+}
+
+// Capitaliza la primera letra de cada palabra
+function capitalize(value) {
+  return value.replace(/(^|\s)\S/g, (char) => char.toUpperCase());
+}
+
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -10,6 +67,7 @@ export default function EmployeesPage() {
   const [search, setSearch] = useState('');
   const [showPhotoCapture, setShowPhotoCapture] = useState(null);
   const [error, setError] = useState('');
+  const [rutError, setRutError] = useState('');
   const [formData, setFormData] = useState({ rut: '', first_name: '', last_name: '', department: '', position: '' });
   const webcamRef = useRef(null);
 
@@ -38,11 +96,19 @@ export default function EmployeesPage() {
     }
     setShowForm(true);
     setError('');
+    setRutError('');
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    setRutError('');
+
+    if (!validateRut(formData.rut)) {
+      setRutError('RUT inválido. Verifica el número ingresado.');
+      return;
+    }
+
     try {
       if (editingEmployee) {
         await employeesApi.update(editingEmployee.id, formData);
@@ -153,31 +219,36 @@ export default function EmployeesPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">RUT *</label>
-                <input value={formData.rut} onChange={e => setFormData({...formData, rut: e.target.value})}
+                <input value={formData.rut} onChange={e => {
+                    const formatted = formatRut(e.target.value);
+                    setFormData({...formData, rut: formatted});
+                    setRutError('');
+                  }}
                   required placeholder="12.345.678-9"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none" />
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-primary-500 outline-none ${rutError ? 'border-red-400' : 'border-gray-200'}`} />
+                {rutError && <p className="text-red-500 text-xs mt-1">{rutError}</p>}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
-                  <input value={formData.first_name} onChange={e => setFormData({...formData, first_name: e.target.value})}
+                  <input value={formData.first_name} onChange={e => setFormData({...formData, first_name: capitalize(e.target.value)})}
                     required className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Apellido *</label>
-                  <input value={formData.last_name} onChange={e => setFormData({...formData, last_name: e.target.value})}
+                  <input value={formData.last_name} onChange={e => setFormData({...formData, last_name: capitalize(e.target.value)})}
                     required className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none" />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
-                <input value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})}
+                <label className="block text-sm font-medium text-gray-700 mb-1">Área</label>
+                <input value={formData.department} onChange={e => setFormData({...formData, department: capitalize(e.target.value)})}
                   placeholder="Ej: Operaciones, TI"
                   className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
-                <input value={formData.position} onChange={e => setFormData({...formData, position: e.target.value})}
+                <input value={formData.position} onChange={e => setFormData({...formData, position: capitalize(e.target.value)})}
                   placeholder="Ej: Analista, Supervisor"
                   className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none" />
               </div>
