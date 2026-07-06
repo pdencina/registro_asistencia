@@ -132,11 +132,14 @@ export default function CheckInPage() {
   }
 
   async function handleRegister(type) {
-    if (!webcamRef.current || !recognizedEmployee) return;
+    if (!recognizedEmployee) return;
 
     setLoading(true);
     try {
-      const photo_snapshot = webcamRef.current.getScreenshot();
+      let photo_snapshot = null;
+      if (webcamRef.current) {
+        photo_snapshot = webcamRef.current.getScreenshot();
+      }
 
       await attendanceApi.register({
         employee_id: recognizedEmployee.id,
@@ -206,6 +209,15 @@ export default function CheckInPage() {
   if (recognizedEmployee) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[80vh] p-6">
+        {/* Webcam oculta para tomar snapshot */}
+        <Webcam
+          ref={webcamRef}
+          audio={false}
+          screenshotFormat="image/jpeg"
+          videoConstraints={videoConstraints}
+          className="hidden"
+          mirrored={true}
+        />
         <div className="w-full max-w-lg">
           {/* Identidad reconocida */}
           <div className="flex items-center gap-4 mb-8 p-5 bg-white rounded-2xl shadow-sm border border-gray-100">
