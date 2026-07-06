@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Loader } from 'lucide-react';
+import { Loader, MapPinOff } from 'lucide-react';
 import CheckInPage from '../pages/CheckInPage';
 import DeviceActivationPage from '../pages/DeviceActivationPage';
 import { devicesApi } from '../api';
 import { getDeviceId } from '../utils/deviceId';
+import { getCurrentPosition, isWithinAllowedRadius, saveAuthorizedLocation } from '../utils/geolocation';
 
 export default function KioskLayout() {
   const [time, setTime] = useState(new Date());
-  const [deviceStatus, setDeviceStatus] = useState('checking'); // checking | authorized | unauthorized
+  const [deviceStatus, setDeviceStatus] = useState('checking'); // checking | authorized | unauthorized | out_of_range
+  const [locationInfo, setLocationInfo] = useState(null);
 
   useEffect(() => {
     const interval = setInterval(() => setTime(new Date()), 1000);
@@ -22,9 +24,39 @@ export default function KioskLayout() {
     try {
       const deviceId = getDeviceId();
       const result = await devicesApi.check(deviceId);
-      setDeviceStatus(result.authorized ? 'authorized' : 'unauthorized');
+
+      if (!result.authorized) {
+        setDeviceStatus('unauthorized');
+        return;
+      }
+
+      // If device has location configured, verify geolocation
+      if (result.location && result.location.lat && result.location.lng) {
+        try {
+          const currentPos = await getCurrentPosition();
+          const check = isWithinAllowedRadius(
+            currentPos.lat, currentPos.lng,
+            result.location.lat, result.location.lng
+          );
+
+          if (!check.allowed) {
+            setLocationInfo(check);
+            setDeviceStatus('out_of_range');
+            return;
+          }
+
+          // Save location for reference
+          saveAuthorizedLocation(result.location.lat, result.location.lng);
+        } catch (geoErr) {
+          // If can't get location, block access (security first)
+          setLocationInfo({ error: geoErr.message });
+          setDeviceStatus('out_of_range');
+          return;
+        }
+      }
+
+      setDeviceStatus('authorized');
     } catch (err) {
-      // If API fails (table doesn't exist yet), allow access temporarily
       console.error('Device check failed:', err);
       setDeviceStatus('unauthorized');
     }
@@ -33,15 +65,45 @@ export default function KioskLayout() {
   // Loading state
   if (deviceStatus === 'checking') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 gap-4">
         <Loader className="w-10 h-10 text-primary-500 animate-spin" />
+        <p className="text-gray-500">Verificando dispositivo...</p>
       </div>
     );
   }
 
   // Not authorized
   if (deviceStatus === 'unauthorized') {
-    return <DeviceActivationPage onActivated={() => setDeviceStatus('authorized')} />;
+    return <DeviceActivationPage onActivated={() => checkDevice()} />;
+  }
+
+  // Out of range
+  if (deviceStatus === 'out_of_range') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="bg-white rounded-3xl shadow-xl border border-red-100 p-8 w-full max-w-sm text-center">
+          <div className="w-20 h-20 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-5">
+            <MapPinOff className="w-10 h-10 text-red-500" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Ubicación no autorizada</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            {locationInfo?.error
+              ? locationInfo.error
+              : `Este dispositivo está a ${locationInfo?.distance}m de la ubicación autorizada (máximo ${locationInfo?.radius}m).`
+            }
+          </p>
+          <p className="text-xs text-gray-400">
+            El registro de asistencia solo funciona desde la ubicación configurada.
+          </p>
+          <button
+            onClick={() => { setDeviceStatus('checking'); checkDevice(); }}
+            className="mt-6 px-6 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-sm text-gray-600 transition-all"
+          >
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // Authorized — show kiosk

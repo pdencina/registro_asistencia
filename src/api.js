@@ -56,8 +56,8 @@ export const attendanceApi = {
 // Devices API
 export const devicesApi = {
   check: (deviceId) => request(`/devices?device_id=${deviceId}`),
-  authorize: (deviceId, pin, name) => request('/devices', {
+  authorize: (deviceId, pin, name, lat, lng) => request('/devices', {
     method: 'POST',
-    body: JSON.stringify({ device_id: deviceId, pin, name }),
+    body: JSON.stringify({ device_id: deviceId, pin, name, lat, lng }),
   }),
 };
