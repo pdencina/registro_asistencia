@@ -94,6 +94,16 @@ export default function CheckInPage() {
     return () => stopDetection();
   }, [step, modelsLoaded, faceMatcher]);
 
+  // Timeout: volver al home si no detecta rostro en 30 segundos
+  useEffect(() => {
+    if (step === STEP_SCANNING) {
+      const timeout = setTimeout(() => {
+        resetFlow();
+      }, 30000);
+      return () => clearTimeout(timeout);
+    }
+  }, [step]);
+
   function startDetection() {
     if (detectionInterval.current) return;
     detectionInterval.current = setInterval(detectFace, 1500);
@@ -249,6 +259,14 @@ export default function CheckInPage() {
     if (step === STEP_RECOGNIZED && employeeStatus?.status === 'exited') {
       const timer = setTimeout(() => resetFlow(), 3000);
       return () => clearTimeout(timer);
+    }
+  }, [step, employeeStatus]);
+
+  // Timeout: volver al home si no interactúa en 15 segundos
+  useEffect(() => {
+    if (step === STEP_RECOGNIZED && employeeStatus?.status !== 'exited') {
+      const timeout = setTimeout(() => resetFlow(), 15000);
+      return () => clearTimeout(timeout);
     }
   }, [step, employeeStatus]);
 

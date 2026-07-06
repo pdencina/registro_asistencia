@@ -1,6 +1,8 @@
 const { getDb } = require('../lib/db');
 const { corsHeaders, handleCors } = require('../lib/cors');
 
+const TZ = 'America/Santiago';
+
 module.exports = async function handler(req, res) {
   if (handleCors(req, res)) return;
 
@@ -18,19 +20,19 @@ module.exports = async function handler(req, res) {
       JOIN employees e ON ar.employee_id = e.id
       WHERE 1=1
     `;
-    const params = [];
-    let idx = 1;
+    const params = [TZ];
+    let idx = 2;
 
     if (employee_id) {
       query += ` AND ar.employee_id = $${idx++}`;
       params.push(employee_id);
     }
     if (start_date) {
-      query += ` AND date(ar.timestamp) >= $${idx++}`;
+      query += ` AND date(ar.timestamp AT TIME ZONE $1) >= $${idx++}`;
       params.push(start_date);
     }
     if (end_date) {
-      query += ` AND date(ar.timestamp) <= $${idx++}`;
+      query += ` AND date(ar.timestamp AT TIME ZONE $1) <= $${idx++}`;
       params.push(end_date);
     }
     if (type) {

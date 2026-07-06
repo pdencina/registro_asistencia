@@ -1,6 +1,8 @@
 const { getDb } = require('../../lib/db');
 const { corsHeaders, handleCors } = require('../../lib/cors');
 
+const TZ = 'America/Santiago';
+
 module.exports = async function handler(req, res) {
   if (handleCors(req, res)) return;
 
@@ -12,13 +14,13 @@ module.exports = async function handler(req, res) {
   const sql = getDb();
 
   try {
-    const today = new Date().toISOString().split('T')[0];
     const records = await sql(`
       SELECT * FROM attendance_records 
-      WHERE employee_id = $1 AND date(timestamp) = $2
+      WHERE employee_id = $1 
+        AND date(timestamp AT TIME ZONE $2) = date(NOW() AT TIME ZONE $2)
       ORDER BY timestamp DESC 
       LIMIT 1
-    `, [id, today]);
+    `, [id, TZ]);
 
     const lastRecord = records.length > 0 ? records[0] : null;
     const status = !lastRecord ? 'absent' :
