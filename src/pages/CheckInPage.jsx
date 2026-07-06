@@ -171,6 +171,16 @@ export default function CheckInPage() {
     }
   }, [recognizedEmployee, employeeStatus]);
 
+  // Auto-register after recognition with a short delay
+  useEffect(() => {
+    if (recognizedEmployee && employeeStatus && !loading && !message) {
+      const timer = setTimeout(() => {
+        captureAndRegister();
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [recognizedEmployee, employeeStatus, loading, message, captureAndRegister]);
+
   function cancelRecognition() {
     setRecognizedEmployee(null);
     setEmployeeStatus(null);
@@ -265,7 +275,7 @@ export default function CheckInPage() {
               </span>
             )}
             <button onClick={cancelRecognition} className="text-gray-400 hover:text-gray-600 text-sm">
-              ✕ No soy yo
+              ✕
             </button>
           </div>
         )}
@@ -300,22 +310,27 @@ export default function CheckInPage() {
 
         {/* Register button */}
         {recognizedEmployee && employeeStatus && (
-          <button
-            onClick={captureAndRegister}
-            disabled={loading}
-            className={`w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 
-              transition-all active:scale-95 disabled:opacity-50 ${
-              employeeStatus.next_action === 'entry'
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200'
-                : 'bg-orange-600 hover:bg-orange-700 text-white shadow-lg shadow-orange-200'
-            }`}
-          >
-            {employeeStatus.next_action === 'entry' ? (
-              <><LogIn className="w-6 h-6" />{loading ? 'Registrando...' : 'Confirmar ENTRADA'}</>
-            ) : (
-              <><LogOut className="w-6 h-6" />{loading ? 'Registrando...' : 'Confirmar SALIDA'}</>
-            )}
-          </button>
+          <div className="space-y-3">
+            <button
+              onClick={captureAndRegister}
+              disabled={loading}
+              className={`w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 
+                transition-all active:scale-95 disabled:opacity-50 ${
+                employeeStatus.next_action === 'entry'
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200'
+                  : 'bg-orange-600 hover:bg-orange-700 text-white shadow-lg shadow-orange-200'
+              }`}
+            >
+              {employeeStatus.next_action === 'entry' ? (
+                <><LogIn className="w-6 h-6" />{loading ? 'Registrando...' : 'Registrando ENTRADA en 2s...'}</>
+              ) : (
+                <><LogOut className="w-6 h-6" />{loading ? 'Registrando...' : 'Registrando SALIDA en 2s...'}</>
+              )}
+            </button>
+            <button onClick={cancelRecognition} className="w-full py-2 text-gray-500 hover:text-gray-700 text-sm font-medium">
+              ✕ No soy esta persona — cancelar
+            </button>
+          </div>
         )}
 
         {/* Empty state */}

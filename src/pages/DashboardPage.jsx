@@ -35,7 +35,7 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Dashboard - Resumen del Día</h2>
+      <h2 className="text-2xl font-bold text-gray-900 mb-6">Dashboard · Resumen del Día</h2>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard icon={<Users className="w-6 h-6" />} label="Total Empleados" value={summary.total_employees} color="blue" />

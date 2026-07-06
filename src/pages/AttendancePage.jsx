@@ -86,7 +86,7 @@ export default function AttendancePage() {
                 <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">Empleado</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">Tipo</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">Fecha/Hora</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">Departamento</th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">Área</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
