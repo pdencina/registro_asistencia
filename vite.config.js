@@ -11,6 +11,13 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: 'dist'
+    outDir: 'dist',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'face-api': ['face-api.js']
+        }
+      }
+    }
   }
 });
