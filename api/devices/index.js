@@ -63,6 +63,9 @@ module.exports = async function handler(req, res) {
           [name || existing.name, device_id]
         );
       } else {
+        // Deactivate all other devices when activating a new one
+        await sql('UPDATE authorized_devices SET active = false, updated_at = NOW()');
+
         await sql(
           'INSERT INTO authorized_devices (id, device_id, name, active, created_at, updated_at) VALUES ($1, $2, $3, true, NOW(), NOW())',
           [crypto.randomUUID(), device_id, name || 'Tótem']

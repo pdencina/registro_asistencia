@@ -1,25 +1,33 @@
 import { useState, useEffect, useRef } from 'react';
 import Webcam from 'react-webcam';
 import * as faceapi from 'face-api.js';
-import { LogIn, LogOut, CheckCircle, XCircle, Loader, Scan } from 'lucide-react';
+import { LogIn, LogOut, XCircle, Loader, Scan, Fingerprint } from 'lucide-react';
 import { employeesApi, attendanceApi } from '../api';
 
+// Estados del flujo
+const STEP_HOME = 'home';
+const STEP_SCANNING = 'scanning';
+const STEP_RECOGNIZED = 'recognized';
+const STEP_CONFIRMED = 'confirmed';
+const STEP_ERROR = 'error';
+
 export default function CheckInPage() {
+  const [step, setStep] = useState(STEP_HOME);
   const [employees, setEmployees] = useState([]);
   const [recognizedEmployee, setRecognizedEmployee] = useState(null);
   const [employeeStatus, setEmployeeStatus] = useState(null);
-  const [message, setMessage] = useState(null);
+  const [confirmData, setConfirmData] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const [modelLoadError, setModelLoadError] = useState('');
-  const [detecting, setDetecting] = useState(false);
   const [faceMatcher, setFaceMatcher] = useState(null);
   const [loadingDescriptors, setLoadingDescriptors] = useState(false);
 
   const webcamRef = useRef(null);
   const detectionInterval = useRef(null);
 
-  // Load face-api models
+  // Load face-api models on mount
   useEffect(() => {
     async function loadModels() {
       try {
@@ -40,9 +48,7 @@ export default function CheckInPage() {
 
   // Load employees and build face descriptors
   useEffect(() => {
-    if (modelsLoaded) {
-      loadEmployeesAndDescriptors();
-    }
+    if (modelsLoaded) loadEmployeesAndDescriptors();
   }, [modelsLoaded]);
 
   async function loadEmployeesAndDescriptors() {
@@ -71,8 +77,7 @@ export default function CheckInPage() {
       }
 
       if (labeledDescriptors.length > 0) {
-        const matcher = new faceapi.FaceMatcher(labeledDescriptors, 0.5);
-        setFaceMatcher(matcher);
+        setFaceMatcher(new faceapi.FaceMatcher(labeledDescriptors, 0.5));
       }
     } catch (err) {
       console.error(err);
@@ -81,17 +86,16 @@ export default function CheckInPage() {
     }
   }
 
-  // Start face detection loop
+  // Detection loop — only when scanning
   useEffect(() => {
-    if (modelsLoaded && faceMatcher && !recognizedEmployee && !message) {
+    if (step === STEP_SCANNING && modelsLoaded && faceMatcher) {
       startDetection();
     }
     return () => stopDetection();
-  }, [modelsLoaded, faceMatcher, recognizedEmployee, message]);
+  }, [step, modelsLoaded, faceMatcher]);
 
   function startDetection() {
     if (detectionInterval.current) return;
-    setDetecting(true);
     detectionInterval.current = setInterval(detectFace, 1500);
   }
 
@@ -100,7 +104,6 @@ export default function CheckInPage() {
       clearInterval(detectionInterval.current);
       detectionInterval.current = null;
     }
-    setDetecting(false);
   }
 
   async function detectFace() {
@@ -121,13 +124,14 @@ export default function CheckInPage() {
           if (employee) {
             stopDetection();
             setRecognizedEmployee(employee);
-            // Get status to show entry time if already registered today
+            // Get status
             try {
               const status = await attendanceApi.getEmployeeStatus(employee.id);
               setEmployeeStatus(status);
             } catch (e) {
               setEmployeeStatus(null);
             }
+            setStep(STEP_RECOGNIZED);
           }
         }
       }
@@ -139,7 +143,44 @@ export default function CheckInPage() {
   async function handleRegister(type) {
     if (!recognizedEmployee) return;
     setLoading(true);
+    setErrorMsg('');
+
     try {
+      // Validación: verificar si ya tiene registro de este tipo hoy
+      const today = new Date().toISOString().split('T')[0];
+      const history = await attendanceApi.getHistory({
+        employee_id: recognizedEmployee.id,
+        start_date: today,
+        end_date: today,
+        type: type,
+      });
+
+      if (history.length > 0) {
+        const hora = new Date(history[0].timestamp).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+        setErrorMsg(
+          type === 'entry'
+            ? `Ya registraste tu ingreso hoy a las ${hora} hrs`
+            : `Ya registraste tu salida hoy a las ${hora} hrs`
+        );
+        setLoading(false);
+        return;
+      }
+
+      // Si es salida, validar que tenga ingreso primero
+      if (type === 'exit') {
+        const entries = await attendanceApi.getHistory({
+          employee_id: recognizedEmployee.id,
+          start_date: today,
+          end_date: today,
+          type: 'entry',
+        });
+        if (entries.length === 0) {
+          setErrorMsg('Debes registrar tu ingreso antes de marcar salida');
+          setLoading(false);
+          return;
+        }
+      }
+
       let photo_snapshot = null;
       if (webcamRef.current) {
         photo_snapshot = webcamRef.current.getScreenshot();
@@ -151,48 +192,56 @@ export default function CheckInPage() {
         photo_snapshot,
       });
 
-      // Get today's records for summary
+      // Get summary for confirmation screen
       let todayEntry = null;
       let todayExit = null;
       try {
-        const status = await attendanceApi.getEmployeeStatus(recognizedEmployee.id);
-        if (status && status.last_record) {
-          // Fetch full history for today to get entry and exit times
-          const today = new Date().toISOString().split('T')[0];
-          const history = await attendanceApi.getHistory({
-            employee_id: recognizedEmployee.id,
-            start_date: today,
-            end_date: today,
-          });
-          todayEntry = history.find(r => r.type === 'entry');
-          todayExit = history.find(r => r.type === 'exit');
-        }
-      } catch (e) {
-        // Non-critical, just skip summary
-      }
+        const allToday = await attendanceApi.getHistory({
+          employee_id: recognizedEmployee.id,
+          start_date: today,
+          end_date: today,
+        });
+        const entry = allToday.find(r => r.type === 'entry');
+        const exit = allToday.find(r => r.type === 'exit');
+        if (entry) todayEntry = new Date(entry.timestamp).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+        if (exit) todayExit = new Date(exit.timestamp).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+      } catch (e) {}
 
-      setMessage({
-        type: 'success',
+      setConfirmData({
         actionType: type,
         employee: `${recognizedEmployee.first_name} ${recognizedEmployee.last_name}`,
         time: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
-        todayEntry: todayEntry ? new Date(todayEntry.timestamp).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : null,
-        todayExit: todayExit ? new Date(todayExit.timestamp).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : null,
+        todayEntry,
+        todayExit,
       });
 
-      setRecognizedEmployee(null);
-      setTimeout(() => setMessage(null), 6000);
+      setStep(STEP_CONFIRMED);
+
+      // Volver al home después de 6 segundos
+      setTimeout(() => {
+        resetFlow();
+      }, 6000);
     } catch (err) {
-      setMessage({ type: 'error', text: err.message });
-      setTimeout(() => setMessage(null), 4000);
+      setErrorMsg(err.message);
     } finally {
       setLoading(false);
     }
   }
 
-  function cancelRecognition() {
+  function resetFlow() {
+    setStep(STEP_HOME);
     setRecognizedEmployee(null);
     setEmployeeStatus(null);
+    setConfirmData(null);
+    setErrorMsg('');
+  }
+
+  function startScanning() {
+    setStep(STEP_SCANNING);
+  }
+
+  function cancelRecognition() {
+    resetFlow();
   }
 
   const videoConstraints = {
@@ -202,72 +251,49 @@ export default function CheckInPage() {
   };
 
   // ═══════════════════════════════════════════════════════════
-  // VISTA 1: Mensaje de confirmación (después de registrar)
+  // STEP: HOME — Pantalla de bienvenida
   // ═══════════════════════════════════════════════════════════
-  if (message) {
+  if (step === STEP_HOME) {
     return (
-      <div className="flex items-center justify-center min-h-[80vh] p-6">
-        <div className={`w-full max-w-md p-10 rounded-3xl text-center animate-fade-in ${
-          message.type === 'success'
-            ? 'bg-white border-2 border-emerald-200 shadow-xl'
-            : 'bg-white border-2 border-red-200 shadow-xl'
-        }`}>
-          {message.type === 'success' ? (
-            <>
-              <div className={`w-24 h-24 rounded-full mx-auto mb-6 flex items-center justify-center ${
-                message.actionType === 'entry' ? 'bg-emerald-100' : 'bg-orange-100'
-              }`}>
-                {message.actionType === 'entry' ? (
-                  <LogIn className="w-14 h-14 text-emerald-600" />
-                ) : (
-                  <LogOut className="w-14 h-14 text-orange-600" />
-                )}
-              </div>
+      <div className="flex flex-col items-center justify-center min-h-[80vh] p-6 animate-fade-in">
+        <div className="text-center max-w-md">
+          <div className="w-28 h-28 bg-primary-50 rounded-full flex items-center justify-center mx-auto mb-8">
+            <Fingerprint className="w-16 h-16 text-primary-600" />
+          </div>
 
-              <p className={`text-3xl font-bold mb-2 ${
-                message.actionType === 'entry' ? 'text-emerald-700' : 'text-orange-700'
-              }`}>
-                {message.actionType === 'entry' ? '¡Ingreso Registrado!' : '¡Salida Registrada!'}
-              </p>
+          <h2 className="text-3xl font-bold text-gray-900 mb-3">Registra tu asistencia</h2>
+          <p className="text-lg text-gray-500 mb-10">
+            Presiona el botón y acércate a la cámara para identificarte
+          </p>
 
-              <p className="text-xl text-gray-700 mb-4">{message.employee}</p>
-
-              {/* Resumen del día */}
-              <div className="bg-gray-50 rounded-2xl p-4 mt-4 space-y-2">
-                {message.actionType === 'entry' ? (
-                  <div className="flex items-center justify-center gap-2 text-gray-600">
-                    <LogIn className="w-5 h-5 text-emerald-500" />
-                    <span>Tu ingreso hoy: <strong>{message.time} hrs</strong></span>
-                  </div>
-                ) : (
-                  <>
-                    {message.todayEntry && (
-                      <div className="flex items-center justify-center gap-2 text-gray-600">
-                        <LogIn className="w-5 h-5 text-emerald-500" />
-                        <span>Ingreso: <strong>{message.todayEntry} hrs</strong></span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-center gap-2 text-gray-600">
-                      <LogOut className="w-5 h-5 text-orange-500" />
-                      <span>Salida: <strong>{message.time} hrs</strong></span>
-                    </div>
-                    {message.todayEntry && (
-                      <p className="text-sm text-gray-400 mt-2 pt-2 border-t border-gray-200">
-                        ¡Buen trabajo hoy! 🙌
-                      </p>
-                    )}
-                  </>
-                )}
-              </div>
-
-              <p className="text-sm text-gray-400 mt-6">Volviendo al inicio...</p>
-            </>
+          {modelsLoaded && faceMatcher ? (
+            <button
+              onClick={startScanning}
+              className="w-full py-5 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl
+                         font-bold text-xl shadow-xl shadow-primary-200 transition-all active:scale-95
+                         flex items-center justify-center gap-3"
+            >
+              <Scan className="w-7 h-7" />
+              Iniciar Reconocimiento
+            </button>
+          ) : modelsLoaded && !faceMatcher && !loadingDescriptors ? (
+            <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200">
+              <p className="text-amber-700 font-medium">⚠️ No hay empleados con foto registrada</p>
+              <p className="text-amber-600 text-sm mt-1">Contacta al administrador</p>
+            </div>
           ) : (
-            <>
-              <XCircle className="w-20 h-20 text-red-500 mx-auto mb-4" />
-              <p className="text-2xl font-bold text-red-700 mb-2">Error</p>
-              <p className="text-gray-600">{message.text}</p>
-            </>
+            <div className="flex flex-col items-center gap-3">
+              <Loader className="w-10 h-10 text-primary-500 animate-spin" />
+              <p className="text-gray-500">
+                {!modelsLoaded ? 'Cargando sistema...' : 'Preparando reconocimiento...'}
+              </p>
+            </div>
+          )}
+
+          {modelLoadError && (
+            <div className="mt-6 p-4 bg-red-50 rounded-2xl border border-red-200">
+              <p className="text-red-700">{modelLoadError}</p>
+            </div>
           )}
         </div>
       </div>
@@ -275,11 +301,67 @@ export default function CheckInPage() {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // VISTA 2: Empleado reconocido → elige INGRESO o SALIDA
+  // STEP: SCANNING — Cámara activa buscando rostro
   // ═══════════════════════════════════════════════════════════
-  if (recognizedEmployee) {
+  if (step === STEP_SCANNING) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[80vh] p-6">
+      <div className="flex flex-col items-center justify-center min-h-[80vh] p-6 animate-fade-in">
+        <div className="w-full max-w-xl">
+          {/* Instruction */}
+          <div className="text-center mb-5">
+            <div className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-50 text-emerald-700 rounded-full font-medium">
+              <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
+              Buscando tu rostro...
+            </div>
+          </div>
+
+          {/* Camera */}
+          <div className="relative rounded-3xl overflow-hidden bg-black shadow-2xl">
+            <Webcam
+              ref={webcamRef}
+              audio={false}
+              screenshotFormat="image/jpeg"
+              videoConstraints={videoConstraints}
+              className="w-full aspect-[4/3] object-cover"
+              mirrored={true}
+            />
+
+            {/* Corner guides */}
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute top-6 left-6 w-16 h-16 border-t-4 border-l-4 border-white/70 rounded-tl-xl" />
+              <div className="absolute top-6 right-6 w-16 h-16 border-t-4 border-r-4 border-white/70 rounded-tr-xl" />
+              <div className="absolute bottom-6 left-6 w-16 h-16 border-b-4 border-l-4 border-white/70 rounded-bl-xl" />
+              <div className="absolute bottom-6 right-6 w-16 h-16 border-b-4 border-r-4 border-white/70 rounded-br-xl" />
+            </div>
+
+            <div className="absolute top-4 left-4 bg-red-600 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5">
+              <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+              EN VIVO
+            </div>
+
+            <div className="absolute bottom-5 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-sm text-white px-6 py-3 rounded-full text-base font-medium">
+              📷 Acércate a la cámara
+            </div>
+          </div>
+
+          <button onClick={cancelRecognition} className="w-full mt-5 py-3 text-gray-400 hover:text-gray-600 text-sm">
+            ← Volver al inicio
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // STEP: RECOGNIZED — Empleado reconocido, elige acción
+  // ═══════════════════════════════════════════════════════════
+  if (step === STEP_RECOGNIZED && recognizedEmployee) {
+    // Determinar qué botones mostrar según el status
+    const alreadyEntry = employeeStatus?.status === 'present' || employeeStatus?.status === 'exited';
+    const alreadyExit = employeeStatus?.status === 'exited';
+
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[80vh] p-6 animate-fade-in">
         {/* Webcam oculta para snapshot */}
         <Webcam
           ref={webcamRef}
@@ -290,8 +372,8 @@ export default function CheckInPage() {
           mirrored={true}
         />
 
-        <div className="w-full max-w-md animate-fade-in">
-          {/* Saludo personalizado */}
+        <div className="w-full max-w-md">
+          {/* Saludo */}
           <div className="text-center mb-8">
             <div className="w-20 h-20 rounded-full bg-gray-200 overflow-hidden mx-auto mb-4 ring-4 ring-emerald-200">
               {recognizedEmployee.photo_url ? (
@@ -306,43 +388,58 @@ export default function CheckInPage() {
               Hola, {recognizedEmployee.first_name} 👋
             </p>
             <p className="text-gray-500">¿Qué deseas registrar?</p>
-            {/* Show current status */}
-            {employeeStatus && employeeStatus.status === 'present' && employeeStatus.last_record && (
-              <p className="text-sm text-emerald-600 mt-2 bg-emerald-50 inline-block px-3 py-1 rounded-full">
-                Ingresaste hoy a las {new Date(employeeStatus.last_record.timestamp).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })} hrs
+
+            {/* Status info */}
+            {employeeStatus?.status === 'present' && employeeStatus.last_record && (
+              <p className="text-sm text-emerald-600 mt-3 bg-emerald-50 inline-block px-3 py-1.5 rounded-full">
+                ✓ Ingresaste hoy a las {new Date(employeeStatus.last_record.timestamp).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })} hrs
               </p>
             )}
-            {employeeStatus && employeeStatus.status === 'exited' && (
-              <p className="text-sm text-orange-600 mt-2 bg-orange-50 inline-block px-3 py-1 rounded-full">
-                Ya registraste salida hoy
+            {employeeStatus?.status === 'exited' && (
+              <p className="text-sm text-orange-600 mt-3 bg-orange-50 inline-block px-3 py-1.5 rounded-full">
+                ✓ Ya completaste tu jornada hoy
               </p>
             )}
           </div>
 
-          {/* Botones INGRESO / SALIDA */}
+          {/* Error message */}
+          {errorMsg && (
+            <div className="mb-5 p-4 bg-red-50 border border-red-200 rounded-2xl text-center">
+              <p className="text-red-700 font-medium">{errorMsg}</p>
+            </div>
+          )}
+
+          {/* Botones */}
           <div className="grid grid-cols-2 gap-5 mb-8">
             <button
               onClick={() => handleRegister('entry')}
-              disabled={loading}
-              className="flex flex-col items-center justify-center gap-4 py-12 rounded-3xl
-                         bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xl
-                         shadow-xl shadow-emerald-200 transition-all active:scale-95 disabled:opacity-50
-                         border-4 border-emerald-400"
+              disabled={loading || alreadyEntry}
+              className={`flex flex-col items-center justify-center gap-4 py-12 rounded-3xl
+                         font-bold text-xl transition-all active:scale-95 disabled:opacity-40 disabled:active:scale-100
+                         ${alreadyEntry 
+                           ? 'bg-gray-200 text-gray-400 border-4 border-gray-200 shadow-none cursor-not-allowed' 
+                           : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-200 border-4 border-emerald-400'
+                         }`}
             >
               <LogIn className="w-14 h-14" />
               <span>INGRESO</span>
+              {alreadyEntry && <span className="text-xs font-normal">Ya registrado</span>}
             </button>
 
             <button
               onClick={() => handleRegister('exit')}
-              disabled={loading}
-              className="flex flex-col items-center justify-center gap-4 py-12 rounded-3xl
-                         bg-orange-500 hover:bg-orange-600 text-white font-bold text-xl
-                         shadow-xl shadow-orange-200 transition-all active:scale-95 disabled:opacity-50
-                         border-4 border-orange-400"
+              disabled={loading || alreadyExit || !alreadyEntry}
+              className={`flex flex-col items-center justify-center gap-4 py-12 rounded-3xl
+                         font-bold text-xl transition-all active:scale-95 disabled:opacity-40 disabled:active:scale-100
+                         ${alreadyExit || !alreadyEntry
+                           ? 'bg-gray-200 text-gray-400 border-4 border-gray-200 shadow-none cursor-not-allowed' 
+                           : 'bg-orange-500 hover:bg-orange-600 text-white shadow-xl shadow-orange-200 border-4 border-orange-400'
+                         }`}
             >
               <LogOut className="w-14 h-14" />
               <span>SALIDA</span>
+              {alreadyExit && <span className="text-xs font-normal">Ya registrado</span>}
+              {!alreadyEntry && !alreadyExit && <span className="text-xs font-normal">Primero ingresa</span>}
             </button>
           </div>
 
@@ -362,84 +459,64 @@ export default function CheckInPage() {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // VISTA 3: Cámara activa buscando rostro
+  // STEP: CONFIRMED — Registro exitoso
   // ═══════════════════════════════════════════════════════════
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[80vh] p-6">
-      <div className="w-full max-w-xl">
-
-        {modelLoadError && (
-          <div className="mb-6 p-4 rounded-2xl bg-red-50 border-2 border-red-200 text-center">
-            <p className="text-red-800 font-semibold">{modelLoadError}</p>
+  if (step === STEP_CONFIRMED && confirmData) {
+    return (
+      <div className="flex items-center justify-center min-h-[80vh] p-6 animate-fade-in">
+        <div className="w-full max-w-md p-10 rounded-3xl text-center bg-white border-2 border-emerald-200 shadow-xl">
+          <div className={`w-24 h-24 rounded-full mx-auto mb-6 flex items-center justify-center ${
+            confirmData.actionType === 'entry' ? 'bg-emerald-100' : 'bg-orange-100'
+          }`}>
+            {confirmData.actionType === 'entry' ? (
+              <LogIn className="w-14 h-14 text-emerald-600" />
+            ) : (
+              <LogOut className="w-14 h-14 text-orange-600" />
+            )}
           </div>
-        )}
 
-        {/* Loading state */}
-        {!modelsLoaded && !modelLoadError && (
-          <div className="flex flex-col items-center justify-center text-center py-16">
-            <Loader className="w-16 h-16 text-primary-500 animate-spin mb-6" />
-            <p className="text-gray-600 text-xl font-medium">Preparando sistema...</p>
-            <p className="text-gray-400 mt-2">Esto toma unos segundos</p>
-          </div>
-        )}
+          <p className={`text-3xl font-bold mb-2 ${
+            confirmData.actionType === 'entry' ? 'text-emerald-700' : 'text-orange-700'
+          }`}>
+            {confirmData.actionType === 'entry' ? '¡Ingreso Registrado!' : '¡Salida Registrada!'}
+          </p>
 
-        {/* Camera active */}
-        {modelsLoaded && (
-          <>
-            {/* Instruction */}
-            <div className="text-center mb-6">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary-50 text-primary-700 rounded-full text-sm font-medium">
-                {loadingDescriptors ? (
-                  <><Loader className="w-4 h-4 animate-spin" /> Preparando reconocimiento...</>
-                ) : detecting ? (
-                  <><Scan className="w-4 h-4" /> Míra la cámara para identificarte</>
-                ) : (
-                  <><Loader className="w-4 h-4 animate-spin" /> Iniciando...</>
+          <p className="text-xl text-gray-700 mb-4">{confirmData.employee}</p>
+
+          {/* Resumen del día */}
+          <div className="bg-gray-50 rounded-2xl p-4 mt-4 space-y-2">
+            {confirmData.actionType === 'entry' ? (
+              <div className="flex items-center justify-center gap-2 text-gray-600">
+                <LogIn className="w-5 h-5 text-emerald-500" />
+                <span>Tu ingreso hoy: <strong>{confirmData.time} hrs</strong></span>
+              </div>
+            ) : (
+              <>
+                {confirmData.todayEntry && (
+                  <div className="flex items-center justify-center gap-2 text-gray-600">
+                    <LogIn className="w-5 h-5 text-emerald-500" />
+                    <span>Ingreso: <strong>{confirmData.todayEntry} hrs</strong></span>
+                  </div>
                 )}
-              </div>
-            </div>
-
-            {/* Camera */}
-            <div className="relative rounded-3xl overflow-hidden bg-black shadow-2xl">
-              <Webcam
-                ref={webcamRef}
-                audio={false}
-                screenshotFormat="image/jpeg"
-                videoConstraints={videoConstraints}
-                className="w-full aspect-[4/3] object-cover"
-                mirrored={true}
-              />
-
-              {/* Overlay frame */}
-              <div className="absolute inset-0 pointer-events-none">
-                {/* Corner guides */}
-                <div className="absolute top-6 left-6 w-16 h-16 border-t-4 border-l-4 border-white/70 rounded-tl-xl" />
-                <div className="absolute top-6 right-6 w-16 h-16 border-t-4 border-r-4 border-white/70 rounded-tr-xl" />
-                <div className="absolute bottom-6 left-6 w-16 h-16 border-b-4 border-l-4 border-white/70 rounded-bl-xl" />
-                <div className="absolute bottom-6 right-6 w-16 h-16 border-b-4 border-r-4 border-white/70 rounded-br-xl" />
-              </div>
-
-              {/* Live indicator */}
-              <div className="absolute top-4 left-4 bg-red-600 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5">
-                <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-                EN VIVO
-              </div>
-
-              {/* Bottom message */}
-              {faceMatcher && (
-                <div className="absolute bottom-5 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-sm text-white px-6 py-3 rounded-full text-base font-medium">
-                  📷 Acércate a la cámara
+                <div className="flex items-center justify-center gap-2 text-gray-600">
+                  <LogOut className="w-5 h-5 text-orange-500" />
+                  <span>Salida: <strong>{confirmData.time} hrs</strong></span>
                 </div>
-              )}
-              {!faceMatcher && !loadingDescriptors && (
-                <div className="absolute bottom-5 left-1/2 -translate-x-1/2 bg-amber-500/90 text-white px-6 py-3 rounded-full text-base">
-                  ⚠️ No hay empleados con foto registrada
-                </div>
-              )}
-            </div>
-          </>
-        )}
+                {confirmData.todayEntry && (
+                  <p className="text-sm text-gray-400 mt-2 pt-2 border-t border-gray-200">
+                    ¡Buen trabajo hoy! 🙌
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+
+          <p className="text-sm text-gray-400 mt-6">Volviendo al inicio...</p>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  // Fallback
+  return null;
 }
