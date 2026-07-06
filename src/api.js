@@ -52,3 +52,12 @@ export const attendanceApi = {
   },
   getEmployeeStatus: (id) => request(`/attendance/status/${id}`),
 };
+
+// Devices API
+export const devicesApi = {
+  check: (deviceId) => request(`/devices?device_id=${deviceId}`),
+  authorize: (deviceId, pin, name) => request('/devices', {
+    method: 'POST',
+    body: JSON.stringify({ device_id: deviceId, pin, name }),
+  }),
+};

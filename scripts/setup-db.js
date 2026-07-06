@@ -50,6 +50,18 @@ async function setup() {
   `);
   console.log('✓ Tabla attendance_records creada');
 
+  await sql(`
+    CREATE TABLE IF NOT EXISTS authorized_devices (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      device_id VARCHAR(100) UNIQUE NOT NULL,
+      name VARCHAR(100) DEFAULT 'Tótem',
+      active BOOLEAN DEFAULT true,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  console.log('✓ Tabla authorized_devices creada');
+
   await sql(`CREATE INDEX IF NOT EXISTS idx_att_employee ON attendance_records(employee_id)`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_att_timestamp ON attendance_records(timestamp)`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_att_type ON attendance_records(type)`);
