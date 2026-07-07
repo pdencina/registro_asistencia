@@ -38,6 +38,10 @@ export const employeesApi = {
     body: JSON.stringify(data),
   }),
   delete: (id) => request(`/employees/${id}`, { method: 'DELETE' }),
+  permanentDelete: (id) => request(`/employees/${id}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ permanent: true }),
+  }),
 };
 
 // Attendance API

@@ -220,8 +220,10 @@ export default function EmployeesPage() {
     try {
       if (action === 'deactivate') {
         await employeesApi.delete(employee.id);
-      } else {
+      } else if (action === 'activate') {
         await employeesApi.update(employee.id, { active: true });
+      } else if (action === 'delete') {
+        await employeesApi.permanentDelete(employee.id);
       }
       setConfirmAction(null);
       loadEmployees();
@@ -338,6 +340,10 @@ export default function EmployeesPage() {
                     <Power className="w-4 h-4" />
                   </button>
                 )}
+                <button onClick={() => setConfirmAction({ employee, action: 'delete' })}
+                  className="text-gray-400 hover:text-red-600 p-1" title="Eliminar permanentemente">
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
             </div>
             {!employee.active && (
@@ -468,28 +474,33 @@ export default function EmployeesPage() {
         </div>
       )}
 
-      {/* Modal Confirmar activar/desactivar */}
+      {/* Modal Confirmar activar/desactivar/eliminar */}
       {confirmAction && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm text-center">
             <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
-              confirmAction.action === 'deactivate' ? 'bg-red-100' : 'bg-emerald-100'
+              confirmAction.action === 'activate' ? 'bg-emerald-100' : 'bg-red-100'
             }`}>
-              {confirmAction.action === 'deactivate' ? (
-                <PowerOff className="w-8 h-8 text-red-600" />
-              ) : (
-                <Power className="w-8 h-8 text-emerald-600" />
-              )}
+              {confirmAction.action === 'deactivate' && <PowerOff className="w-8 h-8 text-red-600" />}
+              {confirmAction.action === 'activate' && <Power className="w-8 h-8 text-emerald-600" />}
+              {confirmAction.action === 'delete' && <Trash2 className="w-8 h-8 text-red-600" />}
             </div>
             <h3 className="text-lg font-bold text-gray-900 mb-2">
-              {confirmAction.action === 'deactivate' ? '¿Desactivar empleado?' : '¿Activar empleado?'}
+              {confirmAction.action === 'deactivate' && '¿Desactivar empleado?'}
+              {confirmAction.action === 'activate' && '¿Activar empleado?'}
+              {confirmAction.action === 'delete' && '¿Eliminar empleado permanentemente?'}
             </h3>
-            <p className="text-gray-500 mb-6">
+            <p className="text-gray-500 mb-4">
               {confirmAction.action === 'deactivate'
-                ? `${confirmAction.employee.first_name} ${confirmAction.employee.last_name} no podrá registrar asistencia.`
-                : `${confirmAction.employee.first_name} ${confirmAction.employee.last_name} podrá volver a registrar asistencia.`
-              }
+                && `${confirmAction.employee.first_name} ${confirmAction.employee.last_name} no podrá registrar asistencia.`}
+              {confirmAction.action === 'activate'
+                && `${confirmAction.employee.first_name} ${confirmAction.employee.last_name} podrá volver a registrar asistencia.`}
+              {confirmAction.action === 'delete'
+                && `${confirmAction.employee.first_name} ${confirmAction.employee.last_name} será eliminado del sistema junto con todos sus registros.`}
             </p>
+            {confirmAction.action === 'delete' && (
+              <p className="text-xs text-red-500 mb-4">⚠️ Esta acción no se puede deshacer.</p>
+            )}
             <div className="flex gap-3">
               <button onClick={() => setConfirmAction(null)}
                 className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium transition-all">
@@ -497,11 +508,13 @@ export default function EmployeesPage() {
               </button>
               <button onClick={handleToggleActive}
                 className={`flex-1 py-3 text-white rounded-xl font-medium transition-all ${
-                  confirmAction.action === 'deactivate'
-                    ? 'bg-red-600 hover:bg-red-700'
-                    : 'bg-emerald-600 hover:bg-emerald-700'
+                  confirmAction.action === 'activate'
+                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                    : 'bg-red-600 hover:bg-red-700'
                 }`}>
-                {confirmAction.action === 'deactivate' ? 'Desactivar' : 'Activar'}
+                {confirmAction.action === 'deactivate' && 'Desactivar'}
+                {confirmAction.action === 'activate' && 'Activar'}
+                {confirmAction.action === 'delete' && 'Eliminar'}
               </button>
             </div>
           </div>

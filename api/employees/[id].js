@@ -63,6 +63,17 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
+      const { permanent } = req.body || {};
+
+      if (permanent) {
+        // Eliminar registros de asistencia asociados primero
+        await sql('DELETE FROM attendance_records WHERE employee_id = $1', [id]);
+        // Eliminar empleado permanentemente
+        await sql('DELETE FROM employees WHERE id = $1', [id]);
+        return res.status(200).json({ message: 'Empleado eliminado permanentemente' });
+      }
+
+      // Soft delete (desactivar)
       const now = new Date().toISOString();
       await sql('UPDATE employees SET active = false, updated_at = $1 WHERE id = $2', [now, id]);
       return res.status(200).json({ message: 'Empleado desactivado' });
