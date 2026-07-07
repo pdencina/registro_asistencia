@@ -18,11 +18,17 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === 'PUT') {
-      const { rut, first_name, last_name, department, position, active, photo } = req.body;
+      const { rut, first_name, last_name, department, position, active, photo, consent_at } = req.body;
 
       const [current] = await sql('SELECT * FROM employees WHERE id = $1', [id]);
       if (!current) {
         return res.status(404).json({ error: 'Empleado no encontrado' });
+      }
+
+      // Handle consent timestamp
+      if (consent_at) {
+        await sql('ALTER TABLE employees ADD COLUMN IF NOT EXISTS consent_at TIMESTAMPTZ');
+        await sql('UPDATE employees SET consent_at = $1 WHERE id = $2', [consent_at, id]);
       }
 
       let photo_url = current.photo_url;

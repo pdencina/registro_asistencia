@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { UserPlus, Edit2, Trash2, Camera, X, Search, Power, PowerOff } from 'lucide-react';
+import { UserPlus, Edit2, Trash2, Camera, X, Search, Power, PowerOff, Shield } from 'lucide-react';
 import Webcam from 'react-webcam';
 import { employeesApi } from '../api';
 
@@ -154,6 +154,8 @@ export default function EmployeesPage() {
   const [error, setError] = useState('');
   const [rutError, setRutError] = useState('');
   const [formData, setFormData] = useState({ rut: '', doc_type: 'RUT', first_name: '', last_name: '', department: '', position: '' });
+  const [showConsent, setShowConsent] = useState(null); // employee object to consent for
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const webcamRef = useRef(null);
 
   useEffect(() => { loadEmployees(); }, []);
@@ -202,10 +204,11 @@ export default function EmployeesPage() {
         setShowForm(false);
         loadEmployees();
       } else {
-        // Create employee, then ask for photo
+        // Create employee, then ask for consent + photo
         const newEmployee = await employeesApi.create(formData);
         setShowForm(false);
-        setNewEmployeePhoto(newEmployee);
+        setShowConsent(newEmployee);
+        setConsentAccepted(false);
         loadEmployees();
       }
     } catch (err) { setError(err.message); }
@@ -243,6 +246,21 @@ export default function EmployeesPage() {
       setNewEmployeePhoto(null);
       loadEmployees();
     } catch (err) { console.error(err); }
+  }
+
+  async function handleConsentAccepted() {
+    if (!showConsent) return;
+    // Save consent timestamp on the employee
+    try {
+      await employeesApi.update(showConsent.id, { consent_at: new Date().toISOString() });
+    } catch (e) {
+      // Non-critical, continue to photo
+    }
+    const employee = showConsent;
+    setShowConsent(null);
+    setConsentAccepted(false);
+    // Proceed to photo capture
+    setNewEmployeePhoto(employee);
   }
 
   const filteredEmployees = employees.filter(e => {
@@ -286,7 +304,16 @@ export default function EmployeesPage() {
                 )}
               </div>
               <button
-                onClick={() => setShowPhotoCapture(employee.id)}
+                onClick={() => {
+                  if (employee.photo_url) {
+                    // Ya tiene foto, puede actualizarla directo
+                    setShowPhotoCapture(employee.id);
+                  } else {
+                    // Primera vez, pedir consentimiento
+                    setShowConsent(employee);
+                    setConsentAccepted(false);
+                  }
+                }}
                 className="absolute -bottom-1 -right-1 w-7 h-7 bg-primary-600 text-white rounded-full flex items-center justify-center shadow-md hover:bg-primary-700"
               >
                 <Camera className="w-4 h-4" />
@@ -475,6 +502,81 @@ export default function EmployeesPage() {
                     : 'bg-emerald-600 hover:bg-emerald-700'
                 }`}>
                 {confirmAction.action === 'deactivate' ? 'Desactivar' : 'Activar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Consentimiento de datos biométricos */}
+      {showConsent && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="text-center mb-4">
+              <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Shield className="w-7 h-7 text-blue-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900">Consentimiento de Datos Biométricos</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Para: <strong>{showConsent.first_name} {showConsent.last_name}</strong>
+              </p>
+            </div>
+
+            <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-700 space-y-3 mb-5 max-h-[300px] overflow-y-auto">
+              <p className="font-semibold text-gray-900">Autorización para el tratamiento de datos biométricos</p>
+
+              <p>
+                Mediante el presente documento, autorizo expresamente a <strong>ARM GLOBAL</strong> para recopilar, 
+                almacenar y procesar mi imagen facial (dato biométrico) con el único propósito de 
+                <strong> registro y control de asistencia laboral</strong> mediante reconocimiento facial.
+              </p>
+
+              <p className="font-semibold text-gray-900 pt-2">Información sobre el tratamiento:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li><strong>Dato recopilado:</strong> Imagen facial para generación de descriptor biométrico.</li>
+                <li><strong>Finalidad:</strong> Identificación automática para registro de ingreso y salida laboral.</li>
+                <li><strong>Responsable:</strong> ARM GLOBAL.</li>
+                <li><strong>Almacenamiento:</strong> Servidores seguros en la nube con acceso restringido.</li>
+                <li><strong>Retención:</strong> Los datos se conservarán mientras exista la relación laboral. Al término, serán eliminados en un plazo máximo de 30 días.</li>
+                <li><strong>Acceso:</strong> Solo personal autorizado de administración tendrá acceso a estos datos.</li>
+              </ul>
+
+              <p className="font-semibold text-gray-900 pt-2">Derechos del titular:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Solicitar la eliminación de sus datos biométricos en cualquier momento.</li>
+                <li>Revocar este consentimiento, lo que implicará la eliminación de la imagen facial del sistema.</li>
+                <li>Acceder a la información almacenada sobre su persona.</li>
+                <li>Solicitar la rectificación de datos incorrectos.</li>
+              </ul>
+
+              <p className="text-xs text-gray-500 pt-2 border-t border-gray-200 mt-3">
+                Este consentimiento se otorga en cumplimiento de la Ley N° 19.628 sobre Protección de la Vida Privada 
+                y la Ley N° 21.719 sobre Protección de Datos Personales de Chile.
+              </p>
+            </div>
+
+            <label className="flex items-start gap-3 mb-5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={consentAccepted}
+                onChange={e => setConsentAccepted(e.target.checked)}
+                className="mt-1 w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <span className="text-sm text-gray-700">
+                He leído y acepto el tratamiento de mis datos biométricos según lo descrito anteriormente.
+              </span>
+            </label>
+
+            <div className="flex gap-3">
+              <button onClick={() => { setShowConsent(null); setConsentAccepted(false); }}
+                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium transition-all">
+                Cancelar
+              </button>
+              <button
+                onClick={handleConsentAccepted}
+                disabled={!consentAccepted}
+                className="flex-1 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                Aceptar y Continuar
               </button>
             </div>
           </div>
