@@ -56,6 +56,7 @@ export const attendanceApi = {
     return request(`/attendance/summary${query}`);
   },
   getEmployeeStatus: (id) => request(`/attendance/status/${id}`),
+  delete: (id) => request(`/attendance/${id}`, { method: 'DELETE' }),
 };
 
 // Devices API

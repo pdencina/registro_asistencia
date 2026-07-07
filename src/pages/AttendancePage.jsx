@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Clock, LogIn, LogOut, Filter } from 'lucide-react';
+import { Clock, LogIn, LogOut, Filter, Trash2, AlertTriangle } from 'lucide-react';
 import { attendanceApi } from '../api';
 
 export default function AttendancePage() {
   const [records, setRecords] = useState([]);
   const [view, setView] = useState('today');
+  const [deleteRecord, setDeleteRecord] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [filters, setFilters] = useState({
     start_date: new Date().toISOString().split('T')[0],
     end_date: new Date().toISOString().split('T')[0],
@@ -27,6 +29,20 @@ export default function AttendancePage() {
         setRecords(data);
       }
     } catch (err) { console.error(err); }
+  }
+
+  async function handleDelete() {
+    if (!deleteRecord) return;
+    setDeleting(true);
+    try {
+      await attendanceApi.delete(deleteRecord.id);
+      setDeleteRecord(null);
+      loadRecords();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
@@ -87,6 +103,7 @@ export default function AttendancePage() {
                 <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">Tipo</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">Fecha/Hora</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">Área</th>
+                <th className="text-right px-6 py-4 text-sm font-semibold text-gray-600">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -123,15 +140,53 @@ export default function AttendancePage() {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-gray-500">{record.department || '—'}</td>
+                  <td className="px-6 py-4 text-right">
+                    <button
+                      onClick={() => setDeleteRecord(record)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      title="Eliminar registro"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </td>
                 </tr>
               ))}
               {records.length === 0 && (
-                <tr><td colSpan="4" className="text-center py-12 text-gray-400">No hay registros para mostrar</td></tr>
+                <tr><td colSpan="5" className="text-center py-12 text-gray-400">No hay registros para mostrar</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Modal Confirmar eliminación */}
+      {deleteRecord && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-8 h-8 text-red-600" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">¿Eliminar este registro?</h3>
+            <p className="text-gray-500 mb-2">
+              {deleteRecord.type === 'entry' ? 'Entrada' : 'Salida'} de <strong>{deleteRecord.first_name} {deleteRecord.last_name}</strong>
+            </p>
+            <p className="text-sm text-gray-400 mb-6">
+              {new Date(deleteRecord.timestamp).toLocaleString('es-CL')}
+            </p>
+            <p className="text-xs text-red-500 mb-6">Esta acción no se puede deshacer.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteRecord(null)}
+                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium transition-all">
+                Cancelar
+              </button>
+              <button onClick={handleDelete} disabled={deleting}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-all disabled:opacity-50">
+                {deleting ? 'Eliminando...' : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
