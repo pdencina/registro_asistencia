@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { UserPlus, Edit2, Trash2, Camera, X, Search } from 'lucide-react';
+import { UserPlus, Edit2, Trash2, Camera, X, Search, Power, PowerOff } from 'lucide-react';
 import Webcam from 'react-webcam';
 import { employeesApi } from '../api';
 
@@ -67,6 +67,7 @@ export default function EmployeesPage() {
   const [search, setSearch] = useState('');
   const [showPhotoCapture, setShowPhotoCapture] = useState(null);
   const [newEmployeePhoto, setNewEmployeePhoto] = useState(null); // For post-creation photo
+  const [confirmAction, setConfirmAction] = useState(null); // { employee, action: 'deactivate'|'activate' }
   const [error, setError] = useState('');
   const [rutError, setRutError] = useState('');
   const [formData, setFormData] = useState({ rut: '', first_name: '', last_name: '', department: '', position: '' });
@@ -125,10 +126,16 @@ export default function EmployeesPage() {
     } catch (err) { setError(err.message); }
   }
 
-  async function handleDelete(id) {
-    if (!confirm('¿Desactivar este empleado?')) return;
+  async function handleToggleActive() {
+    if (!confirmAction) return;
+    const { employee, action } = confirmAction;
     try {
-      await employeesApi.delete(id);
+      if (action === 'deactivate') {
+        await employeesApi.delete(employee.id);
+      } else {
+        await employeesApi.update(employee.id, { active: true });
+      }
+      setConfirmAction(null);
       loadEmployees();
     } catch (err) { console.error(err); }
   }
@@ -182,7 +189,7 @@ export default function EmployeesPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {filteredEmployees.map(employee => (
-          <div key={employee.id} className={`card flex items-start gap-4 ${!employee.active ? 'opacity-50' : ''}`}>
+          <div key={employee.id} className={`card flex items-start gap-4 ${!employee.active ? 'opacity-60' : ''}`}>
             <div className="relative">
               <div className="w-16 h-16 rounded-full bg-gray-200 overflow-hidden shrink-0">
                 {employee.photo_url ? (
@@ -205,12 +212,20 @@ export default function EmployeesPage() {
               <p className="text-sm text-gray-500">{employee.rut}</p>
               <p className="text-sm text-gray-400">{employee.department || '—'} · {employee.position || '—'}</p>
               <div className="flex gap-2 mt-2">
-                <button onClick={() => openForm(employee)} className="text-primary-600 hover:text-primary-800 p-1">
+                <button onClick={() => openForm(employee)} className="text-primary-600 hover:text-primary-800 p-1" title="Editar">
                   <Edit2 className="w-4 h-4" />
                 </button>
-                <button onClick={() => handleDelete(employee.id)} className="text-red-600 hover:text-red-800 p-1">
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {employee.active ? (
+                  <button onClick={() => setConfirmAction({ employee, action: 'deactivate' })}
+                    className="text-red-500 hover:text-red-700 p-1" title="Desactivar">
+                    <PowerOff className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button onClick={() => setConfirmAction({ employee, action: 'activate' })}
+                    className="text-emerald-500 hover:text-emerald-700 p-1" title="Activar">
+                    <Power className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
             {!employee.active && (
@@ -321,6 +336,46 @@ export default function EmployeesPage() {
               </button>
               <button onClick={() => { setNewEmployeePhoto(null); }} className="w-full py-2 text-gray-500 hover:text-gray-700 text-sm">
                 Omitir por ahora
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmar activar/desactivar */}
+      {confirmAction && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm text-center">
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+              confirmAction.action === 'deactivate' ? 'bg-red-100' : 'bg-emerald-100'
+            }`}>
+              {confirmAction.action === 'deactivate' ? (
+                <PowerOff className="w-8 h-8 text-red-600" />
+              ) : (
+                <Power className="w-8 h-8 text-emerald-600" />
+              )}
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">
+              {confirmAction.action === 'deactivate' ? '¿Desactivar empleado?' : '¿Activar empleado?'}
+            </h3>
+            <p className="text-gray-500 mb-6">
+              {confirmAction.action === 'deactivate'
+                ? `${confirmAction.employee.first_name} ${confirmAction.employee.last_name} no podrá registrar asistencia.`
+                : `${confirmAction.employee.first_name} ${confirmAction.employee.last_name} podrá volver a registrar asistencia.`
+              }
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmAction(null)}
+                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium transition-all">
+                Cancelar
+              </button>
+              <button onClick={handleToggleActive}
+                className={`flex-1 py-3 text-white rounded-xl font-medium transition-all ${
+                  confirmAction.action === 'deactivate'
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}>
+                {confirmAction.action === 'deactivate' ? 'Desactivar' : 'Activar'}
               </button>
             </div>
           </div>
