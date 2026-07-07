@@ -157,6 +157,7 @@ export default function EmployeesPage() {
   const [showConsent, setShowConsent] = useState(null); // employee object to consent for
   const [consentAccepted, setConsentAccepted] = useState(false);
   const webcamRef = useRef(null);
+  const webcamNewRef = useRef(null);
 
   useEffect(() => { loadEmployees(); }, []);
 
@@ -241,8 +242,9 @@ export default function EmployeesPage() {
   }
 
   async function captureNewEmployeePhoto() {
-    if (!webcamRef.current || !newEmployeePhoto) return;
-    const photo = webcamRef.current.getScreenshot();
+    if (!webcamNewRef.current || !newEmployeePhoto) return;
+    const photo = webcamNewRef.current.getScreenshot();
+    if (!photo) return;
     try {
       await employeesApi.update(newEmployeePhoto.id, { photo });
       setNewEmployeePhoto(null);
@@ -458,9 +460,10 @@ export default function EmployeesPage() {
               </p>
             </div>
             <div className="rounded-2xl overflow-hidden bg-black mb-4">
-              <Webcam ref={webcamRef} audio={false} screenshotFormat="image/jpeg"
+              <Webcam ref={webcamNewRef} audio={false} screenshotFormat="image/jpeg"
                 videoConstraints={{ width: 480, height: 480, facingMode: 'user' }}
-                className="w-full" mirrored={true} />
+                className="w-full" mirrored={true}
+                onUserMediaError={() => console.error('Camera access denied')} />
             </div>
             <div className="space-y-3">
               <button onClick={() => captureNewEmployeePhoto()} className="btn-primary w-full flex items-center justify-center gap-2">
