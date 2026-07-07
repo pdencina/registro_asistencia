@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import Webcam from 'react-webcam';
 import * as faceapi from 'face-api.js';
-import { LogIn, LogOut, XCircle, Loader, Scan, Fingerprint } from 'lucide-react';
-import { employeesApi, attendanceApi } from '../api';
+import { LogIn, LogOut, XCircle, Loader, Scan, Fingerprint, AlertTriangle } from 'lucide-react';
+import { employeesApi, attendanceApi, tardinessApi, earlyExitApi, authorizersApi, schedulesApi } from '../api';
 import { playSuccess, playError, playRecognized } from '../utils/sounds';
 
 // Estados del flujo
 const STEP_HOME = 'home';
 const STEP_SCANNING = 'scanning';
 const STEP_RECOGNIZED = 'recognized';
+const STEP_EARLY_EXIT = 'early_exit';
 const STEP_CONFIRMED = 'confirmed';
 const STEP_ERROR = 'error';
 
@@ -17,6 +18,8 @@ export default function CheckInPage() {
   const [employees, setEmployees] = useState([]);
   const [recognizedEmployee, setRecognizedEmployee] = useState(null);
   const [employeeStatus, setEmployeeStatus] = useState(null);
+  const [employeeTardiness, setEmployeeTardiness] = useState(null);
+  const [employeeSchedule, setEmployeeSchedule] = useState(null);
   const [confirmData, setConfirmData] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,6 +27,11 @@ export default function CheckInPage() {
   const [modelLoadError, setModelLoadError] = useState('');
   const [faceMatcher, setFaceMatcher] = useState(null);
   const [loadingDescriptors, setLoadingDescriptors] = useState(false);
+  // Early exit state
+  const [earlyExitReason, setEarlyExitReason] = useState('');
+  const [earlyExitAuthorizer, setEarlyExitAuthorizer] = useState('');
+  const [earlyExitNotes, setEarlyExitNotes] = useState('');
+  const [authorizers, setAuthorizers] = useState([]);
 
   const webcamRef = useRef(null);
   const detectionInterval = useRef(null);
@@ -143,6 +151,20 @@ export default function CheckInPage() {
             } catch (e) {
               setEmployeeStatus(null);
             }
+            // Get tardiness info
+            try {
+              const tardiness = await tardinessApi.get(employee.id, 'week');
+              setEmployeeTardiness(tardiness);
+            } catch (e) {
+              setEmployeeTardiness(null);
+            }
+            // Get schedule
+            try {
+              const schedule = await schedulesApi.getEmployeeSchedule(employee.id);
+              setEmployeeSchedule(schedule);
+            } catch (e) {
+              setEmployeeSchedule(null);
+            }
             setStep(STEP_RECOGNIZED);
           }
         }
@@ -191,20 +213,67 @@ export default function CheckInPage() {
           setLoading(false);
           return;
         }
+
+        // Check if early exit
+        if (employeeSchedule) {
+          const now = new Date();
+          const [exitH, exitM] = employeeSchedule.exit_time.split(':').map(Number);
+          const currentMinutes = now.getHours() * 60 + now.getMinutes();
+          const exitMinutes = exitH * 60 + exitM;
+
+          if (currentMinutes < exitMinutes - 10) {
+            // Early exit detected — show form
+            setLoading(false);
+            try {
+              const auths = await authorizersApi.getAll();
+              setAuthorizers(auths);
+            } catch (e) {}
+            setStep(STEP_EARLY_EXIT);
+            return;
+          }
+        }
       }
 
+      await doRegister(type);
+    } catch (err) {
+      setErrorMsg(err.message);
+      playError();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function doRegister(type, earlyExitData = null) {
+    setLoading(true);
+    try {
       let photo_snapshot = null;
       if (webcamRef.current) {
         photo_snapshot = webcamRef.current.getScreenshot();
       }
 
-      await attendanceApi.register({
+      const result = await attendanceApi.register({
         employee_id: recognizedEmployee.id,
         type,
         photo_snapshot,
       });
 
+      // Save early exit info if applicable
+      if (earlyExitData) {
+        try {
+          await earlyExitApi.create({
+            attendance_record_id: result.id,
+            employee_id: recognizedEmployee.id,
+            reason: earlyExitData.reason,
+            authorized_by: earlyExitData.authorized_by || null,
+            notes: earlyExitData.notes || null,
+          });
+        } catch (e) {
+          console.error('Error saving early exit:', e);
+        }
+      }
+
       // Get summary for confirmation screen
+      const today = new Date().toISOString().split('T')[0];
       let todayEntry = null;
       let todayExit = null;
       try {
@@ -225,15 +294,12 @@ export default function CheckInPage() {
         time: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
         todayEntry,
         todayExit,
+        tardiness: employeeTardiness,
       });
 
       playSuccess();
       setStep(STEP_CONFIRMED);
-
-      // Volver al home después de 6 segundos
-      setTimeout(() => {
-        resetFlow();
-      }, 6000);
+      setTimeout(() => resetFlow(), 6000);
     } catch (err) {
       setErrorMsg(err.message);
       playError();
@@ -242,12 +308,38 @@ export default function CheckInPage() {
     }
   }
 
+  async function handleEarlyExitSubmit() {
+    if (!earlyExitReason) {
+      setErrorMsg('Selecciona un motivo');
+      return;
+    }
+    if (earlyExitReason === 'authorized' && !earlyExitAuthorizer) {
+      setErrorMsg('Selecciona quién te autorizó');
+      return;
+    }
+    setErrorMsg('');
+    await doRegister('exit', {
+      reason: earlyExitReason,
+      authorized_by: earlyExitReason === 'authorized' ? earlyExitAuthorizer : null,
+      notes: earlyExitNotes,
+    });
+    // Reset early exit state
+    setEarlyExitReason('');
+    setEarlyExitAuthorizer('');
+    setEarlyExitNotes('');
+  }
+
   function resetFlow() {
     setStep(STEP_HOME);
     setRecognizedEmployee(null);
     setEmployeeStatus(null);
+    setEmployeeTardiness(null);
+    setEmployeeSchedule(null);
     setConfirmData(null);
     setErrorMsg('');
+    setEarlyExitReason('');
+    setEarlyExitAuthorizer('');
+    setEarlyExitNotes('');
   }
 
   function startScanning() {
@@ -430,6 +522,22 @@ export default function CheckInPage() {
                 ✓ Ya completaste tu jornada hoy — volviendo al inicio...
               </p>
             )}
+            {/* Tardiness alert */}
+            {employeeTardiness && employeeTardiness.tardy_count > 0 && (
+              <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-left">
+                <div className="flex items-center gap-2 text-amber-700 font-medium text-sm">
+                  <AlertTriangle className="w-4 h-4" />
+                  Esta semana llevas {employeeTardiness.tardy_count} {employeeTardiness.tardy_count === 1 ? 'día' : 'días'} con atraso
+                </div>
+                <div className="mt-1 text-xs text-amber-600">
+                  {employeeTardiness.tardy_days.map(d => (
+                    <span key={d.date} className="inline-block mr-2">
+                      {new Date(d.date + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'short' })}: {d.late_minutes} min tarde
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Error message */}
@@ -483,6 +591,100 @@ export default function CheckInPage() {
           <button onClick={cancelRecognition} className="w-full py-3 text-gray-400 hover:text-gray-600 text-sm">
             No soy esta persona
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // STEP: EARLY EXIT — Salida anticipada, pide motivo
+  // ═══════════════════════════════════════════════════════════
+  if (step === STEP_EARLY_EXIT && recognizedEmployee) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[80vh] p-6 animate-fade-in">
+        <Webcam ref={webcamRef} audio={false} screenshotFormat="image/jpeg"
+          videoConstraints={videoConstraints} className="hidden" mirrored={true} />
+
+        <div className="w-full max-w-md">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <AlertTriangle className="w-8 h-8 text-amber-600" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900">Salida Anticipada</h3>
+            <p className="text-gray-500 mt-1">
+              Tu horario de salida es a las {employeeSchedule?.exit_time?.slice(0, 5)} hrs
+            </p>
+          </div>
+
+          {errorMsg && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-center">
+              <p className="text-red-700 text-sm font-medium">{errorMsg}</p>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">¿Cuál es el motivo?</label>
+              <div className="grid grid-cols-1 gap-2">
+                {[
+                  { value: 'medical', label: '🏥 Hora médica' },
+                  { value: 'personal', label: '👤 Motivo personal' },
+                  { value: 'authorized', label: '✅ Autorizado por jefatura' },
+                  { value: 'other', label: '📝 Otro motivo' },
+                ].map(opt => (
+                  <button key={opt.value}
+                    onClick={() => { setEarlyExitReason(opt.value); setErrorMsg(''); }}
+                    className={`p-3 rounded-xl text-left text-sm font-medium transition-all ${
+                      earlyExitReason === opt.value
+                        ? 'bg-primary-50 border-2 border-primary-400 text-primary-700'
+                        : 'bg-gray-50 border-2 border-gray-100 text-gray-700 hover:bg-gray-100'
+                    }`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {earlyExitReason === 'authorized' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">¿Quién te autorizó?</label>
+                <div className="grid grid-cols-1 gap-2">
+                  {authorizers.map(auth => (
+                    <button key={auth.id}
+                      onClick={() => { setEarlyExitAuthorizer(auth.id); setErrorMsg(''); }}
+                      className={`p-3 rounded-xl text-left text-sm transition-all ${
+                        earlyExitAuthorizer === auth.id
+                          ? 'bg-primary-50 border-2 border-primary-400 text-primary-700 font-medium'
+                          : 'bg-gray-50 border-2 border-gray-100 text-gray-700 hover:bg-gray-100'
+                      }`}>
+                      {auth.name}{auth.position ? ` · ${auth.position}` : ''}
+                    </button>
+                  ))}
+                  {authorizers.length === 0 && (
+                    <p className="text-sm text-gray-400 text-center py-2">No hay autorizadores configurados</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {(earlyExitReason === 'other' || earlyExitReason === 'personal') && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nota (opcional)</label>
+                <input value={earlyExitNotes} onChange={e => setEarlyExitNotes(e.target.value)}
+                  placeholder="Breve descripción..."
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none" />
+              </div>
+            )}
+
+            <button onClick={handleEarlyExitSubmit} disabled={loading}
+              className="w-full py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-bold text-lg transition-all active:scale-95 disabled:opacity-50">
+              {loading ? 'Registrando...' : 'Confirmar Salida'}
+            </button>
+
+            <button onClick={cancelRecognition} className="w-full py-2 text-gray-400 hover:text-gray-600 text-sm">
+              Cancelar
+            </button>
+          </div>
         </div>
       </div>
     );

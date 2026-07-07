@@ -71,3 +71,31 @@ export const devicesApi = {
     body: JSON.stringify({ device_id: deviceId, pin, name, lat, lng }),
   }),
 };
+
+// Schedules API
+export const schedulesApi = {
+  getAll: () => request('/schedules'),
+  create: (data) => request('/schedules', { method: 'POST', body: JSON.stringify(data) }),
+  update: (data) => request('/schedules', { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id) => request('/schedules', { method: 'DELETE', body: JSON.stringify({ id }) }),
+  getEmployeeSchedule: (employeeId) => request(`/schedules/assign?employee_id=${employeeId}`),
+  assignSchedule: (data) => request('/schedules/assign', { method: 'POST', body: JSON.stringify(data) }),
+};
+
+// Authorizers API
+export const authorizersApi = {
+  getAll: () => request('/authorizers'),
+  create: (data) => request('/authorizers', { method: 'POST', body: JSON.stringify(data) }),
+  delete: (id) => request('/authorizers', { method: 'DELETE', body: JSON.stringify({ id }) }),
+};
+
+// Tardiness API
+export const tardinessApi = {
+  get: (employeeId, period = 'week') => request(`/attendance/tardiness?employee_id=${employeeId}&period=${period}`),
+};
+
+// Early Exit API
+export const earlyExitApi = {
+  create: (data) => request('/attendance/early-exit', { method: 'POST', body: JSON.stringify(data) }),
+  getByEmployee: (employeeId) => request(`/attendance/early-exit?employee_id=${employeeId}`),
+};
