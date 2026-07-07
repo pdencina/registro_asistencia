@@ -43,8 +43,20 @@ export default function KioskLayout() {
         return;
       }
 
-      // If device has location configured, verify geolocation
-      if (result.location && result.location.lat && result.location.lng) {
+      // Check if geolocation is enabled in settings
+      let geoEnabled = true;
+      try {
+        const settingsRes = await fetch('/api/settings');
+        if (settingsRes.ok) {
+          const settings = await settingsRes.json();
+          geoEnabled = settings.geolocation_enabled !== false;
+        }
+      } catch (e) {
+        // If can't fetch settings, assume geo is enabled (safe default)
+      }
+
+      // If device has location configured AND geolocation is enabled, verify
+      if (geoEnabled && result.location && result.location.lat && result.location.lng) {
         try {
           const currentPos = await getCurrentPosition();
           const check = isWithinAllowedRadius(
@@ -58,10 +70,8 @@ export default function KioskLayout() {
             return;
           }
 
-          // Save location for reference
           saveAuthorizedLocation(result.location.lat, result.location.lng);
         } catch (geoErr) {
-          // If can't get location, block access (security first)
           setLocationInfo({ error: geoErr.message });
           setDeviceStatus('out_of_range');
           return;

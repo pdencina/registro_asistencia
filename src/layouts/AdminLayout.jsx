@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom';
-import { Users, ClipboardList, BarChart3, LogOut, Camera } from 'lucide-react';
+import { Users, ClipboardList, BarChart3, LogOut, Camera, Settings } from 'lucide-react';
 import EmployeesPage from '../pages/EmployeesPage';
 import AttendancePage from '../pages/AttendancePage';
 import DashboardPage from '../pages/DashboardPage';
 import CheckInPage from '../pages/CheckInPage';
+import SettingsPage from '../pages/SettingsPage';
 
 export default function AdminLayout() {
   const [time, setTime] = useState(new Date());
@@ -52,6 +53,7 @@ export default function AdminLayout() {
           <Route path="/employees" element={<EmployeesPage />} />
           <Route path="/attendance" element={<AttendancePage />} />
           <Route path="/register" element={<CheckInPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>
       </main>
@@ -63,6 +65,7 @@ export default function AdminLayout() {
           <NavItem to="/admin/employees" icon={<Users className="w-6 h-6" />} label="Empleados" />
           <NavItem to="/admin/attendance" icon={<ClipboardList className="w-6 h-6" />} label="Asistencia" />
           <NavItem to="/admin/register" icon={<Camera className="w-6 h-6" />} label="Registrar" />
+          <NavItem to="/admin/settings" icon={<Settings className="w-6 h-6" />} label="Config" />
         </div>
       </nav>
     </div>
