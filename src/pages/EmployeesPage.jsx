@@ -3,56 +3,139 @@ import { UserPlus, Edit2, Trash2, Camera, X, Search, Power, PowerOff } from 'luc
 import Webcam from 'react-webcam';
 import { employeesApi } from '../api';
 
-// Formatea RUT con puntos y guión: 12.345.678-9
+// Tipos de documento soportados
+const DOC_TYPES = [
+  { value: 'RUT', label: 'RUT (Chile)', placeholder: '12.345.678-9' },
+  { value: 'CI_VE', label: 'Cédula (Venezuela)', placeholder: 'V-12.345.678' },
+  { value: 'CC_CO', label: 'Cédula (Colombia)', placeholder: '1.234.567.890' },
+  { value: 'DNI', label: 'DNI (Perú/Argentina)', placeholder: '12345678' },
+  { value: 'PASSPORT', label: 'Pasaporte', placeholder: 'AB1234567' },
+  { value: 'OTHER', label: 'Otro documento', placeholder: 'Número de documento' },
+];
+
+// Formatea según tipo de documento
+function formatDocument(value, type) {
+  switch (type) {
+    case 'RUT':
+      return formatRut(value);
+    case 'CI_VE':
+      return formatVenezuela(value);
+    case 'CC_CO':
+      return formatColombia(value);
+    default:
+      return value;
+  }
+}
+
+// Valida según tipo de documento
+function validateDocument(value, type) {
+  if (!value || value.trim().length < 3) return { valid: false, error: 'Documento muy corto' };
+
+  switch (type) {
+    case 'RUT':
+      return validateRut(value) ? { valid: true } : { valid: false, error: 'RUT inválido. Verifica el dígito verificador.' };
+    case 'CI_VE':
+      return validateVenezuela(value) ? { valid: true } : { valid: false, error: 'Cédula venezolana inválida. Formato: V-12.345.678' };
+    case 'CC_CO':
+      return validateColombia(value) ? { valid: true } : { valid: false, error: 'Cédula colombiana inválida. Debe tener 6-10 dígitos.' };
+    case 'DNI':
+      return validateDNI(value) ? { valid: true } : { valid: false, error: 'DNI inválido. Debe tener 7-8 dígitos.' };
+    case 'PASSPORT':
+      return value.trim().length >= 5 ? { valid: true } : { valid: false, error: 'Pasaporte inválido. Mínimo 5 caracteres.' };
+    case 'OTHER':
+      return { valid: true };
+    default:
+      return { valid: true };
+  }
+}
+
+// === RUT Chile ===
 function formatRut(value) {
   let clean = value.replace(/[^0-9kK]/g, '').toUpperCase();
   if (clean.length === 0) return '';
-  
-  // Separar cuerpo y dígito verificador
   let dv = clean.slice(-1);
   let body = clean.slice(0, -1);
-  
   if (body.length === 0) return clean;
-  
-  // Agregar puntos al cuerpo
   let formatted = '';
   let count = 0;
   for (let i = body.length - 1; i >= 0; i--) {
     formatted = body[i] + formatted;
     count++;
-    if (count === 3 && i > 0) {
-      formatted = '.' + formatted;
-      count = 0;
-    }
+    if (count === 3 && i > 0) { formatted = '.' + formatted; count = 0; }
   }
-  
   return formatted + '-' + dv;
 }
 
-// Valida RUT chileno con módulo 11
 function validateRut(rut) {
   const clean = rut.replace(/[.\-]/g, '').toUpperCase();
   if (clean.length < 2) return false;
-  
   const body = clean.slice(0, -1);
   const dv = clean.slice(-1);
-  
   if (!/^\d+$/.test(body)) return false;
-  
-  let sum = 0;
-  let multiplier = 2;
+  let sum = 0, multiplier = 2;
   for (let i = body.length - 1; i >= 0; i--) {
     sum += parseInt(body[i]) * multiplier;
     multiplier = multiplier === 7 ? 2 : multiplier + 1;
   }
-  
   const remainder = 11 - (sum % 11);
   let expectedDv;
   if (remainder === 11) expectedDv = '0';
   else if (remainder === 10) expectedDv = 'K';
   else expectedDv = String(remainder);
-  
   return dv === expectedDv;
+}
+
+// === Cédula Venezuela ===
+function formatVenezuela(value) {
+  let clean = value.replace(/[^0-9vVeEjJgG]/g, '').toUpperCase();
+  if (clean.length === 0) return '';
+  // First char should be V, E, J or G
+  let prefix = '';
+  if (/^[VEJG]/.test(clean)) {
+    prefix = clean[0] + '-';
+    clean = clean.slice(1);
+  }
+  // Format numbers with dots
+  let formatted = '';
+  let count = 0;
+  for (let i = clean.length - 1; i >= 0; i--) {
+    if (!/\d/.test(clean[i])) continue;
+    formatted = clean[i] + formatted;
+    count++;
+    if (count === 3 && i > 0) { formatted = '.' + formatted; count = 0; }
+  }
+  return prefix + formatted;
+}
+
+function validateVenezuela(value) {
+  const clean = value.replace(/[.\-\s]/g, '').toUpperCase();
+  // V/E/J/G followed by 6-9 digits
+  return /^[VEJG]?\d{6,9}$/.test(clean);
+}
+
+// === Cédula Colombia ===
+function formatColombia(value) {
+  let clean = value.replace(/\D/g, '');
+  if (clean.length === 0) return '';
+  let formatted = '';
+  let count = 0;
+  for (let i = clean.length - 1; i >= 0; i--) {
+    formatted = clean[i] + formatted;
+    count++;
+    if (count === 3 && i > 0) { formatted = '.' + formatted; count = 0; }
+  }
+  return formatted;
+}
+
+function validateColombia(value) {
+  const clean = value.replace(/\D/g, '');
+  return clean.length >= 6 && clean.length <= 10;
+}
+
+// === DNI (Perú/Argentina) ===
+function validateDNI(value) {
+  const clean = value.replace(/\D/g, '');
+  return clean.length >= 7 && clean.length <= 8;
 }
 
 // Capitaliza la primera letra de cada palabra
@@ -70,7 +153,7 @@ export default function EmployeesPage() {
   const [confirmAction, setConfirmAction] = useState(null); // { employee, action: 'deactivate'|'activate' }
   const [error, setError] = useState('');
   const [rutError, setRutError] = useState('');
-  const [formData, setFormData] = useState({ rut: '', first_name: '', last_name: '', department: '', position: '' });
+  const [formData, setFormData] = useState({ rut: '', doc_type: 'RUT', first_name: '', last_name: '', department: '', position: '' });
   const webcamRef = useRef(null);
 
   useEffect(() => { loadEmployees(); }, []);
@@ -87,6 +170,7 @@ export default function EmployeesPage() {
       setEditingEmployee(employee);
       setFormData({
         rut: employee.rut,
+        doc_type: employee.doc_type || 'RUT',
         first_name: employee.first_name,
         last_name: employee.last_name,
         department: employee.department || '',
@@ -94,7 +178,7 @@ export default function EmployeesPage() {
       });
     } else {
       setEditingEmployee(null);
-      setFormData({ rut: '', first_name: '', last_name: '', department: '', position: '' });
+      setFormData({ rut: '', doc_type: 'RUT', first_name: '', last_name: '', department: '', position: '' });
     }
     setShowForm(true);
     setError('');
@@ -106,8 +190,9 @@ export default function EmployeesPage() {
     setError('');
     setRutError('');
 
-    if (!validateRut(formData.rut)) {
-      setRutError('RUT inválido. Verifica el número ingresado.');
+    const validation = validateDocument(formData.rut, formData.doc_type);
+    if (!validation.valid) {
+      setRutError(validation.error);
       return;
     }
 
@@ -248,13 +333,27 @@ export default function EmployeesPage() {
             {error && <p className="text-red-600 text-sm bg-red-50 p-3 rounded-xl mb-4">{error}</p>}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">RUT *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Documento</label>
+                <select value={formData.doc_type} onChange={e => {
+                    setFormData({...formData, doc_type: e.target.value, rut: ''});
+                    setRutError('');
+                  }}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none">
+                  {DOC_TYPES.map(dt => (
+                    <option key={dt.value} value={dt.value}>{dt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {DOC_TYPES.find(d => d.value === formData.doc_type)?.label || 'Documento'} *
+                </label>
                 <input value={formData.rut} onChange={e => {
-                    const formatted = formatRut(e.target.value);
+                    const formatted = formatDocument(e.target.value, formData.doc_type);
                     setFormData({...formData, rut: formatted});
                     setRutError('');
                   }}
-                  required placeholder="12.345.678-9"
+                  required placeholder={DOC_TYPES.find(d => d.value === formData.doc_type)?.placeholder}
                   className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-primary-500 outline-none ${rutError ? 'border-red-400' : 'border-gray-200'}`} />
                 {rutError && <p className="text-red-500 text-xs mt-1">{rutError}</p>}
               </div>
