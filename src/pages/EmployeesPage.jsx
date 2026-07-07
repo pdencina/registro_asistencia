@@ -66,6 +66,7 @@ export default function EmployeesPage() {
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [search, setSearch] = useState('');
   const [showPhotoCapture, setShowPhotoCapture] = useState(null);
+  const [newEmployeePhoto, setNewEmployeePhoto] = useState(null); // For post-creation photo
   const [error, setError] = useState('');
   const [rutError, setRutError] = useState('');
   const [formData, setFormData] = useState({ rut: '', first_name: '', last_name: '', department: '', position: '' });
@@ -112,11 +113,15 @@ export default function EmployeesPage() {
     try {
       if (editingEmployee) {
         await employeesApi.update(editingEmployee.id, formData);
+        setShowForm(false);
+        loadEmployees();
       } else {
-        await employeesApi.create(formData);
+        // Create employee, then ask for photo
+        const newEmployee = await employeesApi.create(formData);
+        setShowForm(false);
+        setNewEmployeePhoto(newEmployee);
+        loadEmployees();
       }
-      setShowForm(false);
-      loadEmployees();
     } catch (err) { setError(err.message); }
   }
 
@@ -134,6 +139,16 @@ export default function EmployeesPage() {
     try {
       await employeesApi.update(employeeId, { photo });
       setShowPhotoCapture(null);
+      loadEmployees();
+    } catch (err) { console.error(err); }
+  }
+
+  async function captureNewEmployeePhoto() {
+    if (!webcamRef.current || !newEmployeePhoto) return;
+    const photo = webcamRef.current.getScreenshot();
+    try {
+      await employeesApi.update(newEmployeePhoto.id, { photo });
+      setNewEmployeePhoto(null);
       loadEmployees();
     } catch (err) { console.error(err); }
   }
@@ -278,6 +293,36 @@ export default function EmployeesPage() {
             <button onClick={() => capturePhoto(showPhotoCapture)} className="btn-primary w-full flex items-center justify-center gap-2">
               <Camera className="w-5 h-5" /> Capturar y Guardar
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Foto post-creación */}
+      {newEmployeePhoto && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-lg">
+            <div className="text-center mb-4">
+              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Camera className="w-8 h-8 text-emerald-600" />
+              </div>
+              <h3 className="text-xl font-bold">¡Empleado creado!</h3>
+              <p className="text-gray-500 mt-1">
+                Ahora toma una foto de <strong>{newEmployeePhoto.first_name} {newEmployeePhoto.last_name}</strong> para el reconocimiento facial
+              </p>
+            </div>
+            <div className="rounded-2xl overflow-hidden bg-black mb-4">
+              <Webcam ref={webcamRef} audio={false} screenshotFormat="image/jpeg"
+                videoConstraints={{ width: 480, height: 480, facingMode: 'user' }}
+                className="w-full" mirrored={true} />
+            </div>
+            <div className="space-y-3">
+              <button onClick={() => captureNewEmployeePhoto()} className="btn-primary w-full flex items-center justify-center gap-2">
+                <Camera className="w-5 h-5" /> Capturar Foto
+              </button>
+              <button onClick={() => { setNewEmployeePhoto(null); }} className="w-full py-2 text-gray-500 hover:text-gray-700 text-sm">
+                Omitir por ahora
+              </button>
+            </div>
           </div>
         </div>
       )}

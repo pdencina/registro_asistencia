@@ -3,6 +3,7 @@ import Webcam from 'react-webcam';
 import * as faceapi from 'face-api.js';
 import { LogIn, LogOut, XCircle, Loader, Scan, Fingerprint } from 'lucide-react';
 import { employeesApi, attendanceApi } from '../api';
+import { playSuccess, playError, playRecognized } from '../utils/sounds';
 
 // Estados del flujo
 const STEP_HOME = 'home';
@@ -134,6 +135,7 @@ export default function CheckInPage() {
           if (employee) {
             stopDetection();
             setRecognizedEmployee(employee);
+            playRecognized();
             // Get status
             try {
               const status = await attendanceApi.getEmployeeStatus(employee.id);
@@ -225,6 +227,7 @@ export default function CheckInPage() {
         todayExit,
       });
 
+      playSuccess();
       setStep(STEP_CONFIRMED);
 
       // Volver al home después de 6 segundos
@@ -233,6 +236,7 @@ export default function CheckInPage() {
       }, 6000);
     } catch (err) {
       setErrorMsg(err.message);
+      playError();
     } finally {
       setLoading(false);
     }
