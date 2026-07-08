@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import Webcam from 'react-webcam';
 import * as faceapi from 'face-api.js';
-import { LogIn, LogOut, XCircle, Loader, Scan, Fingerprint, AlertTriangle } from 'lucide-react';
+import { LogIn, LogOut, XCircle, Loader, Scan, Fingerprint, AlertTriangle, Eye } from 'lucide-react';
 import { employeesApi, attendanceApi, tardinessApi, earlyExitApi, authorizersApi, schedulesApi } from '../api';
 import { playSuccess, playError, playRecognized } from '../utils/sounds';
+import { LivenessDetector } from '../utils/livenessDetection';
 
 // Estados del flujo
 const STEP_HOME = 'home';
 const STEP_SCANNING = 'scanning';
+const STEP_LIVENESS = 'liveness';
 const STEP_RECOGNIZED = 'recognized';
 const STEP_EARLY_EXIT = 'early_exit';
 const STEP_CONFIRMED = 'confirmed';
@@ -32,6 +34,10 @@ export default function CheckInPage() {
   const [earlyExitAuthorizer, setEarlyExitAuthorizer] = useState('');
   const [earlyExitNotes, setEarlyExitNotes] = useState('');
   const [authorizers, setAuthorizers] = useState([]);
+  // Liveness detection
+  const [livenessStatus, setLivenessStatus] = useState('waiting'); // waiting | confirmed | failed
+  const livenessDetector = useRef(new LivenessDetector());
+  const livenessInterval = useRef(null);
 
   const webcamRef = useRef(null);
   const detectionInterval = useRef(null);
@@ -165,7 +171,10 @@ export default function CheckInPage() {
             } catch (e) {
               setEmployeeSchedule(null);
             }
-            setStep(STEP_RECOGNIZED);
+            // Go to liveness check
+            setLivenessStatus('waiting');
+            livenessDetector.current.reset();
+            setStep(STEP_LIVENESS);
           }
         }
       }
@@ -248,6 +257,17 @@ export default function CheckInPage() {
         type,
         photo_snapshot,
       });
+
+      // Send email notification (non-blocking)
+      fetch('/api/notifications/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employee_id: recognizedEmployee.id,
+          type,
+          timestamp: new Date().toISOString(),
+        }),
+      }).catch(() => {});
 
       // Save early exit info if applicable
       if (earlyExitData) {
@@ -358,6 +378,39 @@ export default function CheckInPage() {
     }
   }, [step, employeeStatus]);
 
+  // Liveness detection loop
+  useEffect(() => {
+    if (step === STEP_LIVENESS) {
+      livenessInterval.current = setInterval(async () => {
+        if (!webcamRef.current || !webcamRef.current.video) return;
+        const result = await livenessDetector.current.checkFrame(webcamRef.current.video);
+        if (result.blinkDetected) {
+          clearInterval(livenessInterval.current);
+          livenessInterval.current = null;
+          setLivenessStatus('confirmed');
+          playSuccess();
+          // Move to recognized step
+          setTimeout(() => setStep(STEP_RECOGNIZED), 500);
+        }
+      }, 200);
+
+      // Timeout: if no blink in 8 seconds, fail
+      const timeout = setTimeout(() => {
+        if (livenessInterval.current) {
+          clearInterval(livenessInterval.current);
+          livenessInterval.current = null;
+        }
+        setLivenessStatus('failed');
+        setTimeout(() => resetFlow(), 3000);
+      }, 8000);
+
+      return () => {
+        if (livenessInterval.current) clearInterval(livenessInterval.current);
+        clearTimeout(timeout);
+      };
+    }
+  }, [step]);
+
   const videoConstraints = {
     width: 640,
     height: 480,
@@ -460,6 +513,63 @@ export default function CheckInPage() {
 
           <button onClick={cancelRecognition} className="w-full mt-5 py-3 text-gray-400 hover:text-gray-600 text-sm">
             ← Volver al inicio
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // STEP: LIVENESS — Verificación de parpadeo anti-spoofing
+  // ═══════════════════════════════════════════════════════════
+  if (step === STEP_LIVENESS && recognizedEmployee) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[80vh] p-6 animate-fade-in">
+        <div className="w-full max-w-md text-center">
+          {/* Camera for liveness */}
+          <div className="relative rounded-3xl overflow-hidden bg-black shadow-xl mb-6 mx-auto" style={{ maxWidth: '320px' }}>
+            <Webcam
+              ref={webcamRef}
+              audio={false}
+              screenshotFormat="image/jpeg"
+              videoConstraints={videoConstraints}
+              className="w-full aspect-square object-cover"
+              mirrored={true}
+            />
+            <div className="absolute inset-0 border-4 border-primary-400/50 rounded-3xl pointer-events-none" />
+          </div>
+
+          {livenessStatus === 'waiting' && (
+            <>
+              <div className="flex items-center justify-center gap-2 mb-3">
+                <Eye className="w-6 h-6 text-primary-600 animate-pulse" />
+                <h3 className="text-xl font-bold text-gray-900">Verificación de Identidad</h3>
+              </div>
+              <p className="text-gray-600 text-lg mb-2">
+                Hola, {recognizedEmployee.first_name}
+              </p>
+              <p className="text-primary-600 font-medium text-lg animate-pulse">
+                👁️ Parpadea mirando la cámara
+              </p>
+              <p className="text-gray-400 text-sm mt-3">Esto confirma que eres una persona real</p>
+            </>
+          )}
+
+          {livenessStatus === 'confirmed' && (
+            <div className="text-emerald-600">
+              <p className="text-xl font-bold">✓ Identidad verificada</p>
+            </div>
+          )}
+
+          {livenessStatus === 'failed' && (
+            <div className="text-red-600">
+              <p className="text-xl font-bold mb-2">No se detectó parpadeo</p>
+              <p className="text-gray-500 text-sm">Volviendo al inicio...</p>
+            </div>
+          )}
+
+          <button onClick={cancelRecognition} className="mt-6 text-gray-400 hover:text-gray-600 text-sm">
+            Cancelar
           </button>
         </div>
       </div>

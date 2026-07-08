@@ -143,6 +143,41 @@ function capitalize(value) {
   return value.replace(/(^|\s)\S/g, (char) => char.toUpperCase());
 }
 
+// Formatea teléfono chileno: +56 9 1234 5678
+function formatPhone(value) {
+  let clean = value.replace(/[^\d+]/g, '');
+  
+  // Si empieza con +, mantener
+  if (clean.startsWith('+')) {
+    const digits = clean.slice(1).replace(/\D/g, '');
+    if (digits.startsWith('56')) {
+      // Chilean format
+      const rest = digits.slice(2);
+      if (rest.length <= 1) return `+56 ${rest}`;
+      if (rest.length <= 5) return `+56 ${rest.slice(0,1)} ${rest.slice(1)}`;
+      return `+56 ${rest.slice(0,1)} ${rest.slice(1,5)} ${rest.slice(5,9)}`;
+    }
+    // Other international
+    return '+' + digits;
+  }
+  
+  // Sin +, asumir chileno
+  clean = clean.replace(/\D/g, '');
+  if (clean.startsWith('569')) {
+    const rest = clean.slice(3);
+    return `+56 9 ${rest.slice(0,4)} ${rest.slice(4,8)}`.trim();
+  }
+  if (clean.startsWith('56')) {
+    const rest = clean.slice(2);
+    if (rest.length <= 1) return `+56 ${rest}`;
+    return `+56 ${rest.slice(0,1)} ${rest.slice(1,5)} ${rest.slice(5,9)}`.trim();
+  }
+  if (clean.startsWith('9') && clean.length <= 9) {
+    return `+56 9 ${clean.slice(1,5)} ${clean.slice(5,9)}`.trim();
+  }
+  return clean;
+}
+
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -153,7 +188,7 @@ export default function EmployeesPage() {
   const [confirmAction, setConfirmAction] = useState(null); // { employee, action: 'deactivate'|'activate' }
   const [error, setError] = useState('');
   const [rutError, setRutError] = useState('');
-  const [formData, setFormData] = useState({ rut: '', doc_type: 'RUT', first_name: '', last_name: '', department: '', position: '' });
+  const [formData, setFormData] = useState({ rut: '', doc_type: 'RUT', first_name: '', last_name: '', department: '', position: '', email: '', phone: '' });
   const [showConsent, setShowConsent] = useState(null); // employee object to consent for
   const [consentAccepted, setConsentAccepted] = useState(false);
   const webcamRef = useRef(null);
@@ -177,11 +212,13 @@ export default function EmployeesPage() {
         first_name: employee.first_name,
         last_name: employee.last_name,
         department: employee.department || '',
-        position: employee.position || ''
+        position: employee.position || '',
+        email: employee.email || '',
+        phone: employee.phone || '',
       });
     } else {
       setEditingEmployee(null);
-      setFormData({ rut: '', doc_type: 'RUT', first_name: '', last_name: '', department: '', position: '' });
+      setFormData({ rut: '', doc_type: 'RUT', first_name: '', last_name: '', department: '', position: '', email: '', phone: '' });
     }
     setShowForm(true);
     setError('');
@@ -414,6 +451,21 @@ export default function EmployeesPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
                 <input value={formData.position} onChange={e => setFormData({...formData, position: capitalize(e.target.value)})}
                   placeholder="Ej: Analista, Supervisor"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value.toLowerCase()})}
+                  placeholder="nombre@empresa.cl"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                <input type="tel" value={formData.phone} onChange={e => {
+                    const formatted = formatPhone(e.target.value);
+                    setFormData({...formData, phone: formatted});
+                  }}
+                  placeholder="+56 9 1234 5678"
                   className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none" />
               </div>
               <button type="submit" className="btn-primary w-full">

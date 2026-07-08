@@ -34,7 +34,7 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      const { rut, first_name, last_name, department, position, photo } = req.body;
+      const { rut, first_name, last_name, department, position, photo, email, phone } = req.body;
 
       if (!rut || !first_name || !last_name) {
         return res.status(400).json({ error: 'RUT, nombre y apellido son obligatorios' });
@@ -58,10 +58,14 @@ module.exports = async function handler(req, res) {
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
 
+      // Ensure email/phone columns exist
+      await sql('ALTER TABLE employees ADD COLUMN IF NOT EXISTS email VARCHAR(200)');
+      await sql('ALTER TABLE employees ADD COLUMN IF NOT EXISTS phone VARCHAR(50)');
+
       await sql(
-        `INSERT INTO employees (id, rut, first_name, last_name, department, position, photo_url, active, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9)`,
-        [id, rut, first_name, last_name, department || null, position || null, photo_url, now, now]
+        `INSERT INTO employees (id, rut, first_name, last_name, department, position, email, phone, photo_url, active, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, $10, $11)`,
+        [id, rut, first_name, last_name, department || null, position || null, email || null, phone || null, photo_url, now, now]
       );
 
       const [employee] = await sql('SELECT * FROM employees WHERE id = $1', [id]);
