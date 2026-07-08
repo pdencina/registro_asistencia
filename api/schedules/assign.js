@@ -6,6 +6,32 @@ module.exports = async function handler(req, res) {
 
   const sql = getDb();
 
+  // Ensure tables exist
+  try {
+    await sql(`
+      CREATE TABLE IF NOT EXISTS work_schedules (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(100) NOT NULL,
+        entry_time TIME NOT NULL DEFAULT '08:30',
+        exit_time TIME NOT NULL DEFAULT '18:00',
+        tolerance_minutes INTEGER NOT NULL DEFAULT 10,
+        is_default BOOLEAN DEFAULT false,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await sql(`
+      CREATE TABLE IF NOT EXISTS employee_schedules (
+        employee_id UUID PRIMARY KEY,
+        schedule_id UUID,
+        custom_entry_time TIME,
+        custom_exit_time TIME,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+  } catch (e) {
+    // Tables might already exist
+  }
+
   try {
     // POST: Assign schedule to employee (or custom times)
     if (req.method === 'POST') {

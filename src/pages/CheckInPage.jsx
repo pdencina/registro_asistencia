@@ -214,9 +214,10 @@ export default function CheckInPage() {
         }
 
         // Check if early exit
-        if (employeeSchedule) {
+        if (employeeSchedule && employeeSchedule.exit_time) {
           const now = new Date();
-          const [exitH, exitM] = employeeSchedule.exit_time.split(':').map(Number);
+          const exitTimeClean = employeeSchedule.exit_time.slice(0, 5); // "18:00:00" -> "18:00"
+          const [exitH, exitM] = exitTimeClean.split(':').map(Number);
           const currentMinutes = now.getHours() * 60 + now.getMinutes();
           const exitMinutes = exitH * 60 + exitM;
 
