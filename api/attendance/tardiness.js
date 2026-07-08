@@ -31,13 +31,13 @@ module.exports = async function handler(req, res) {
     `, [employee_id]);
 
     if (assignment) {
-      entryTime = assignment.custom_entry_time || assignment.entry_time || '08:30';
+      entryTime = (assignment.custom_entry_time || assignment.entry_time || '08:30').slice(0, 5);
       tolerance = assignment.tolerance_minutes || 10;
     } else {
       // Fall back to default
       const [defaultSch] = await sql('SELECT entry_time, tolerance_minutes FROM work_schedules WHERE is_default = true LIMIT 1');
       if (defaultSch) {
-        entryTime = defaultSch.entry_time;
+        entryTime = (defaultSch.entry_time || '08:30').slice(0, 5);
         tolerance = defaultSch.tolerance_minutes;
       }
     }
@@ -63,8 +63,8 @@ module.exports = async function handler(req, res) {
     // Get all entries in the period
     const entries = await sql(`
       SELECT id, timestamp, 
-             (timestamp AT TIME ZONE $1)::time as entry_time_local,
-             date(timestamp AT TIME ZONE $1) as entry_date
+             to_char(timestamp AT TIME ZONE $1, 'HH24:MI') as entry_time_local,
+             to_char(timestamp AT TIME ZONE $1, 'YYYY-MM-DD') as entry_date
       FROM attendance_records 
       WHERE employee_id = $2 
         AND type = 'entry'
@@ -78,7 +78,7 @@ module.exports = async function handler(req, res) {
 
     const tardyDays = [];
     for (const entry of entries) {
-      const entryLocal = entry.entry_time_local;
+      const entryLocal = entry.entry_time_local; // Format: "HH:MM"
       const [h, m] = entryLocal.split(':').map(Number);
       const entryMinutes = h * 60 + m;
 
@@ -86,8 +86,8 @@ module.exports = async function handler(req, res) {
         const lateBy = entryMinutes - (hours * 60 + minutes);
         tardyDays.push({
           date: entry.entry_date,
-          entry_time: entryLocal.slice(0, 5),
-          expected_time: entryTime,
+          entry_time: entryLocal,
+          expected_time: entryTime.slice(0, 5),
           late_minutes: lateBy,
         });
       }

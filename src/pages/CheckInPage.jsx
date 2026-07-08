@@ -532,7 +532,7 @@ export default function CheckInPage() {
                 <div className="mt-1 text-xs text-amber-600">
                   {employeeTardiness.tardy_days.map(d => (
                     <span key={d.date} className="inline-block mr-2">
-                      {new Date(d.date + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'short' })}: {d.late_minutes} min tarde
+                      {d.entry_time} hrs ({d.late_minutes} min tarde)
                     </span>
                   ))}
                 </div>
