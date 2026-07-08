@@ -4,24 +4,27 @@ import * as faceapi from 'face-api.js';
  * Detects blink by measuring Eye Aspect Ratio (EAR).
  * A blink occurs when EAR drops below threshold momentarily.
  * 
- * EAR = (|p2-p6| + |p3-p5|) / (2 * |p1-p4|)
- * where p1-p6 are the 6 landmarks of each eye.
+ * face-api.js eye landmarks have 6 points:
+ * [0] = left corner, [1] = upper-left, [2] = upper-right,
+ * [3] = right corner, [4] = lower-right, [5] = lower-left
  */
 
-const EAR_THRESHOLD = 0.22; // Below this = eye closed
-const BLINK_FRAMES = 2; // Need at least 2 consecutive frames with closed eyes
+const EAR_THRESHOLD = 0.26; // Below this = eye closed (relaxed for webcam quality)
+const BLINK_CONSECUTIVE = 1; // Just 1 frame with closed eyes is enough
 
 export class LivenessDetector {
   constructor() {
     this.closedFrames = 0;
     this.blinkDetected = false;
-    this.checksPerformed = 0;
+    this.openEarBaseline = null;
+    this.frameCount = 0;
   }
 
   reset() {
     this.closedFrames = 0;
     this.blinkDetected = false;
-    this.checksPerformed = 0;
+    this.openEarBaseline = null;
+    this.frameCount = 0;
   }
 
   /**
@@ -50,13 +53,26 @@ export class LivenessDetector {
       const rightEAR = computeEAR(rightEye);
       const avgEAR = (leftEAR + rightEAR) / 2;
 
-      this.checksPerformed++;
+      this.frameCount++;
 
-      if (avgEAR < EAR_THRESHOLD) {
+      // Establish baseline (open eyes) from first few frames
+      if (this.frameCount <= 3) {
+        if (!this.openEarBaseline || avgEAR > this.openEarBaseline) {
+          this.openEarBaseline = avgEAR;
+        }
+        return { blinkDetected: false, ear: avgEAR };
+      }
+
+      // Dynamic threshold: use 65% of baseline as threshold
+      const dynamicThreshold = this.openEarBaseline 
+        ? this.openEarBaseline * 0.65 
+        : EAR_THRESHOLD;
+
+      if (avgEAR < dynamicThreshold) {
         this.closedFrames++;
       } else {
-        // Eyes open after being closed = blink completed
-        if (this.closedFrames >= BLINK_FRAMES) {
+        // Eyes opened after being closed = blink completed
+        if (this.closedFrames >= BLINK_CONSECUTIVE) {
           this.blinkDetected = true;
         }
         this.closedFrames = 0;
@@ -74,21 +90,22 @@ export class LivenessDetector {
 }
 
 function computeEAR(eyePoints) {
-  // eye points: [p1, p2, p3, p4, p5, p6]
-  // p1 = left corner, p4 = right corner
-  // p2, p3 = top, p5, p6 = bottom
-  if (eyePoints.length < 6) return 0.3; // Default open
+  if (!eyePoints || eyePoints.length < 6) return 0.3;
 
-  const p1 = eyePoints[0];
-  const p2 = eyePoints[1];
-  const p3 = eyePoints[2];
-  const p4 = eyePoints[3];
-  const p5 = eyePoints[4];
-  const p6 = eyePoints[5];
+  // face-api.js eye landmarks:
+  // [0]=left corner, [1]=upper-left, [2]=upper-right, [3]=right corner, [4]=lower-right, [5]=lower-left
+  const p1 = eyePoints[0]; // left corner
+  const p2 = eyePoints[1]; // upper-left
+  const p3 = eyePoints[2]; // upper-right
+  const p4 = eyePoints[3]; // right corner
+  const p5 = eyePoints[4]; // lower-right
+  const p6 = eyePoints[5]; // lower-left
 
-  const vertical1 = distance(p2, p6);
-  const vertical2 = distance(p3, p5);
-  const horizontal = distance(p1, p4);
+  // Vertical distances (top to bottom)
+  const vertical1 = distance(p2, p6); // upper-left to lower-left
+  const vertical2 = distance(p3, p5); // upper-right to lower-right
+  // Horizontal distance
+  const horizontal = distance(p1, p4); // left corner to right corner
 
   if (horizontal === 0) return 0.3;
   return (vertical1 + vertical2) / (2 * horizontal);

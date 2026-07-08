@@ -394,7 +394,7 @@ export default function CheckInPage() {
         }
       }, 200);
 
-      // Timeout: if no blink in 8 seconds, fail
+      // Timeout: if no blink in 15 seconds, fail
       const timeout = setTimeout(() => {
         if (livenessInterval.current) {
           clearInterval(livenessInterval.current);
@@ -402,7 +402,7 @@ export default function CheckInPage() {
         }
         setLivenessStatus('failed');
         setTimeout(() => resetFlow(), 3000);
-      }, 8000);
+      }, 15000);
 
       return () => {
         if (livenessInterval.current) clearInterval(livenessInterval.current);
