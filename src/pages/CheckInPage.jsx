@@ -180,36 +180,28 @@ export default function CheckInPage() {
     setErrorMsg('');
 
     try {
-      // Validación: verificar si ya tiene registro de este tipo hoy
-      const today = new Date().toISOString().split('T')[0];
-      const history = await attendanceApi.getHistory({
-        employee_id: recognizedEmployee.id,
-        start_date: today,
-        end_date: today,
-        type: type,
-      });
+      // Use employeeStatus which already correctly knows today's state
+      const status = employeeStatus || await attendanceApi.getEmployeeStatus(recognizedEmployee.id);
 
-      if (history.length > 0) {
-        const hora = new Date(history[0].timestamp).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
-        setErrorMsg(
-          type === 'entry'
-            ? `Ya registraste tu ingreso hoy a las ${hora} hrs`
-            : `Ya registraste tu salida hoy a las ${hora} hrs`
-        );
-        setLoading(false);
-        return;
+      if (type === 'entry') {
+        // Can't entry if already present or exited
+        if (status.status === 'present' || status.status === 'exited') {
+          setErrorMsg('Ya registraste tu ingreso hoy');
+          setLoading(false);
+          return;
+        }
       }
 
-      // Si es salida, validar que tenga ingreso primero
       if (type === 'exit') {
-        const entries = await attendanceApi.getHistory({
-          employee_id: recognizedEmployee.id,
-          start_date: today,
-          end_date: today,
-          type: 'entry',
-        });
-        if (entries.length === 0) {
+        // Can't exit if absent (no entry today)
+        if (status.status === 'absent') {
           setErrorMsg('Debes registrar tu ingreso antes de marcar salida');
+          setLoading(false);
+          return;
+        }
+        // Can't exit if already exited
+        if (status.status === 'exited') {
+          setErrorMsg('Ya registraste tu salida hoy');
           setLoading(false);
           return;
         }
