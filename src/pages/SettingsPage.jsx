@@ -103,7 +103,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Geolocation toggle */}
-        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl mb-3">
           <div className="flex items-center gap-3">
             <MapPin className={`w-5 h-5 ${settings.geolocation_enabled ? 'text-emerald-600' : 'text-gray-400'}`} />
             <div>
@@ -127,6 +127,20 @@ export default function SettingsPage() {
               <ToggleLeft className="w-10 h-10 text-gray-400" />
             )}
           </button>
+        </div>
+
+        {/* Liveness info */}
+        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+          <div className="flex items-center gap-3">
+            <Shield className={`w-5 h-5 text-gray-400`} />
+            <div>
+              <p className="font-medium text-gray-900">Detección Anti-Suplantación (Parpadeo)</p>
+              <p className="text-sm text-gray-500">
+                Desactivado temporalmente. Requiere buenas condiciones de luz y cámara de alta resolución.
+              </p>
+            </div>
+          </div>
+          <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full">Próximamente</span>
         </div>
       </div>
 

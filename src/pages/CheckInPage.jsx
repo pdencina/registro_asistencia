@@ -171,10 +171,8 @@ export default function CheckInPage() {
             } catch (e) {
               setEmployeeSchedule(null);
             }
-            // Go to liveness check
-            setLivenessStatus('waiting');
-            livenessDetector.current.reset();
-            setStep(STEP_LIVENESS);
+            // Go directly to recognized (liveness disabled for now)
+            setStep(STEP_RECOGNIZED);
           }
         }
       }
