@@ -66,7 +66,9 @@ module.exports = async function handler(req, res) {
       const { permanent } = req.body || {};
 
       if (permanent) {
-        // Eliminar registros de asistencia asociados primero
+        // Eliminar todas las referencias primero
+        await sql('DELETE FROM early_exits WHERE employee_id = $1', [id]);
+        await sql('DELETE FROM employee_schedules WHERE employee_id = $1', [id]);
         await sql('DELETE FROM attendance_records WHERE employee_id = $1', [id]);
         // Eliminar empleado permanentemente
         await sql('DELETE FROM employees WHERE id = $1', [id]);
