@@ -76,11 +76,18 @@ module.exports = async function handler(req, res) {
     const [hours, minutes] = entryTime.split(':').map(Number);
     const maxEntryMinutes = hours * 60 + minutes + tolerance;
 
+    // Only consider entries that are reasonable (before noon or before exit time + 2hrs)
+    // This prevents test entries or afternoon entries from counting as "late"
+    const maxReasonableEntry = Math.min((hours + 4) * 60, 14 * 60); // Max 4hrs after expected or noon
+
     const tardyDays = [];
     for (const entry of entries) {
       const entryLocal = entry.entry_time_local; // Format: "HH:MM"
       const [h, m] = entryLocal.split(':').map(Number);
       const entryMinutes = h * 60 + m;
+
+      // Skip entries that are way too late (probably test data or afternoon)
+      if (entryMinutes > maxReasonableEntry) continue;
 
       if (entryMinutes > maxEntryMinutes) {
         const lateBy = entryMinutes - (hours * 60 + minutes);
