@@ -53,7 +53,7 @@ export default function DashboardPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard icon={<Users className="w-6 h-6" />} label="Total Empleados" value={summary.total_employees} color="blue" />
+        <StatCard icon={<Users className="w-6 h-6" />} label="Total Colaboradores" value={summary.total_employees} color="blue" />
         <StatCard icon={<UserCheck className="w-6 h-6" />} label="Presentes Hoy" value={summary.present_today} color="green" />
         <StatCard icon={<LogOut className="w-6 h-6" />} label="Salieron" value={summary.exited_today} color="orange" />
         <StatCard icon={<UserX className="w-6 h-6" />} label="Ausentes" value={summary.absent} color="red" />

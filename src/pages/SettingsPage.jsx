@@ -155,7 +155,7 @@ export default function SettingsPage() {
           <div className="p-4 bg-gray-50 rounded-xl">
             <p className="font-medium text-gray-900 mb-1">Webhook de Ausencias</p>
             <p className="text-sm text-gray-500 mb-3">
-              Envía una notificación con los empleados ausentes del día. Compatible con Slack, Teams, o cualquier webhook.
+              Envía una notificación con los colaboradores ausentes del día. Compatible con Slack, Teams, o cualquier webhook.
             </p>
             <p className="text-xs text-gray-400 mb-3">
               Configura la variable <code className="bg-gray-200 px-1 rounded">WEBHOOK_URL</code> en Vercel con la URL de tu webhook (ej: Slack Incoming Webhook).

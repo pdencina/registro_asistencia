@@ -444,7 +444,7 @@ export default function CheckInPage() {
             </button>
           ) : modelsLoaded && !faceMatcher && !loadingDescriptors ? (
             <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200">
-              <p className="text-amber-700 font-medium">⚠️ No hay empleados con foto registrada</p>
+              <p className="text-amber-700 font-medium">⚠️ No hay colaboradores con foto registrada</p>
               <p className="text-amber-600 text-sm mt-1">Contacta al administrador</p>
             </div>
           ) : (

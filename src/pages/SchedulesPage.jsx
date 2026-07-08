@@ -184,13 +184,13 @@ export default function SchedulesPage() {
       {/* ─── TAB: Asignar ─── */}
       {activeTab === 'assign' && (
         <div className="card">
-          <h3 className="font-bold text-gray-900 mb-4">Asignar Horario a Empleado</h3>
+          <h3 className="font-bold text-gray-900 mb-4">Asignar Horario a Colaborador</h3>
           <form onSubmit={handleAssign} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Empleado</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Colaborador</label>
               <select value={assignData.employee_id} onChange={e => setAssignData({...assignData, employee_id: e.target.value})}
                 required className="w-full px-4 py-3 border border-gray-200 rounded-xl outline-none">
-                <option value="">Seleccionar empleado...</option>
+                <option value="">Seleccionar colaborador...</option>
                 {employees.map(emp => (
                   <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name} — {emp.rut}</option>
                 ))}
@@ -230,7 +230,7 @@ export default function SchedulesPage() {
         <div className="card">
           <h3 className="font-bold text-gray-900 mb-4">Autorizadores de Salida Anticipada</h3>
           <p className="text-sm text-gray-500 mb-4">
-            Personas que pueden autorizar la salida anticipada de un empleado.
+            Personas que pueden autorizar la salida anticipada de un colaborador.
           </p>
 
           {/* List */}

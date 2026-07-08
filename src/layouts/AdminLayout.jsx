@@ -65,7 +65,7 @@ export default function AdminLayout() {
       <nav className="bg-white border-t border-gray-200 px-4 py-2">
         <div className="flex justify-around max-w-3xl mx-auto">
           <NavItem to="/admin" icon={<BarChart3 className="w-6 h-6" />} label="Dashboard" end />
-          <NavItem to="/admin/employees" icon={<Users className="w-6 h-6" />} label="Empleados" />
+          <NavItem to="/admin/employees" icon={<Users className="w-6 h-6" />} label="Colaboradores" />
           <NavItem to="/admin/attendance" icon={<ClipboardList className="w-6 h-6" />} label="Asistencia" />
           <NavItem to="/admin/register" icon={<Camera className="w-6 h-6" />} label="Registrar" />
           <NavItem to="/admin/schedules" icon={<Clock className="w-6 h-6" />} label="Horarios" />
