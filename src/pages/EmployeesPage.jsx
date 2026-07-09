@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { UserPlus, Edit2, Trash2, Camera, X, Search, Power, PowerOff, Shield } from 'lucide-react';
-import Webcam from 'react-webcam';
 import { employeesApi } from '../api';
 
 // Tipos de documento soportados
@@ -193,8 +192,59 @@ export default function EmployeesPage() {
   const [consentAccepted, setConsentAccepted] = useState(false);
   const webcamRef = useRef(null);
   const webcamNewRef = useRef(null);
+  const streamRef = useRef(null);
 
   useEffect(() => { loadEmployees(); }, []);
+
+  // Start camera when modals open
+  useEffect(() => {
+    if (showPhotoCapture || newEmployeePhoto) {
+      startCamera(showPhotoCapture ? webcamRef : webcamNewRef);
+    }
+    return () => {
+      if (!showPhotoCapture && !newEmployeePhoto) {
+        stopCameraStream();
+      }
+    };
+  }, [showPhotoCapture, newEmployeePhoto]);
+
+  async function startCamera(videoRef) {
+    try {
+      // Stop any existing stream
+      stopCameraStream();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error('Camera error:', err);
+    }
+  }
+
+  function stopCameraStream() {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+  }
+
+  function takeSnapshot(videoRef) {
+    if (!videoRef.current) return null;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    // Mirror the image
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0);
+    return canvas.toDataURL('image/jpeg', 0.8);
+  }
 
   async function loadEmployees() {
     try {
@@ -269,21 +319,23 @@ export default function EmployeesPage() {
   }
 
   async function capturePhoto(employeeId) {
-    if (!webcamRef.current) return;
-    const photo = webcamRef.current.getScreenshot();
+    const photo = takeSnapshot(webcamRef);
+    if (!photo) return;
     try {
       await employeesApi.update(employeeId, { photo });
+      stopCameraStream();
       setShowPhotoCapture(null);
       loadEmployees();
     } catch (err) { console.error(err); }
   }
 
   async function captureNewEmployeePhoto() {
-    if (!webcamNewRef.current || !newEmployeePhoto) return;
-    const photo = webcamNewRef.current.getScreenshot();
+    if (!newEmployeePhoto) return;
+    const photo = takeSnapshot(webcamNewRef);
     if (!photo) return;
     try {
       await employeesApi.update(newEmployeePhoto.id, { photo });
+      stopCameraStream();
       setNewEmployeePhoto(null);
       loadEmployees();
     } catch (err) { console.error(err); }
@@ -487,10 +539,9 @@ export default function EmployeesPage() {
               </button>
             </div>
             <div className="rounded-2xl overflow-hidden bg-black mb-4">
-              <Webcam ref={webcamRef} audio={false} screenshotFormat="image/jpeg"
-                videoConstraints={{ facingMode: 'user' }}
-                className="w-full aspect-[4/3] object-cover" mirrored={true}
-                playsInline={true} />
+              <video ref={webcamRef} autoPlay playsInline muted
+                className="w-full aspect-[4/3] object-cover mirror-video"
+                style={{ transform: 'scaleX(-1)' }} />
             </div>
             <button onClick={() => capturePhoto(showPhotoCapture)} className="btn-primary w-full flex items-center justify-center gap-2">
               <Camera className="w-5 h-5" /> Capturar y Guardar
@@ -513,17 +564,15 @@ export default function EmployeesPage() {
               </p>
             </div>
             <div className="rounded-2xl overflow-hidden bg-black mb-4">
-              <Webcam ref={webcamNewRef} audio={false} screenshotFormat="image/jpeg"
-                videoConstraints={{ facingMode: 'user' }}
-                className="w-full aspect-[4/3] object-cover" mirrored={true}
-                playsInline={true}
-                onUserMediaError={(err) => console.error('Camera error:', err)} />
+              <video ref={webcamNewRef} autoPlay playsInline muted
+                className="w-full aspect-[4/3] object-cover"
+                style={{ transform: 'scaleX(-1)' }} />
             </div>
             <div className="space-y-3">
               <button onClick={() => captureNewEmployeePhoto()} className="btn-primary w-full flex items-center justify-center gap-2">
                 <Camera className="w-5 h-5" /> Capturar Foto
               </button>
-              <button onClick={() => { setNewEmployeePhoto(null); }} className="w-full py-2 text-gray-500 hover:text-gray-700 text-sm">
+              <button onClick={() => { stopCameraStream(); setNewEmployeePhoto(null); }} className="w-full py-2 text-gray-500 hover:text-gray-700 text-sm">
                 Omitir por ahora
               </button>
             </div>
