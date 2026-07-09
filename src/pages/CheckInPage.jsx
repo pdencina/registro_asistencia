@@ -411,8 +411,8 @@ export default function CheckInPage() {
   }, [step]);
 
   const videoConstraints = {
-    width: 640,
-    height: 480,
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
     facingMode: 'user',
   };
 
