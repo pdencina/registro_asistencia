@@ -213,7 +213,12 @@ export default function EmployeesPage() {
       // Stop any existing stream
       stopCameraStream();
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user' },
+        video: {
+          facingMode: 'user',
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          zoom: { ideal: 2 },
+        },
         audio: false,
       });
       streamRef.current = stream;
@@ -540,8 +545,8 @@ export default function EmployeesPage() {
             </div>
             <div className="rounded-2xl overflow-hidden bg-black mb-4">
               <video ref={webcamRef} autoPlay playsInline muted
-                className="w-full aspect-[4/3] object-cover mirror-video"
-                style={{ transform: 'scaleX(-1)' }} />
+                className="w-full aspect-[3/4] object-cover scale-125"
+                style={{ transform: 'scaleX(-1) scale(1.3)', transformOrigin: 'center center' }} />
             </div>
             <button onClick={() => capturePhoto(showPhotoCapture)} className="btn-primary w-full flex items-center justify-center gap-2">
               <Camera className="w-5 h-5" /> Capturar y Guardar
@@ -565,8 +570,8 @@ export default function EmployeesPage() {
             </div>
             <div className="rounded-2xl overflow-hidden bg-black mb-4">
               <video ref={webcamNewRef} autoPlay playsInline muted
-                className="w-full aspect-[4/3] object-cover"
-                style={{ transform: 'scaleX(-1)' }} />
+                className="w-full aspect-[3/4] object-cover scale-125"
+                style={{ transform: 'scaleX(-1) scale(1.3)', transformOrigin: 'center center' }} />
             </div>
             <div className="space-y-3">
               <button onClick={() => captureNewEmployeePhoto()} className="btn-primary w-full flex items-center justify-center gap-2">
