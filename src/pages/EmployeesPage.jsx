@@ -488,8 +488,9 @@ export default function EmployeesPage() {
             </div>
             <div className="rounded-2xl overflow-hidden bg-black mb-4">
               <Webcam ref={webcamRef} audio={false} screenshotFormat="image/jpeg"
-                videoConstraints={{ width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }}
-                className="w-full aspect-[4/3] object-cover" mirrored={true} />
+                videoConstraints={{ facingMode: 'user' }}
+                className="w-full aspect-[4/3] object-cover" mirrored={true}
+                playsInline={true} />
             </div>
             <button onClick={() => capturePhoto(showPhotoCapture)} className="btn-primary w-full flex items-center justify-center gap-2">
               <Camera className="w-5 h-5" /> Capturar y Guardar
@@ -513,9 +514,10 @@ export default function EmployeesPage() {
             </div>
             <div className="rounded-2xl overflow-hidden bg-black mb-4">
               <Webcam ref={webcamNewRef} audio={false} screenshotFormat="image/jpeg"
-                videoConstraints={{ width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }}
+                videoConstraints={{ facingMode: 'user' }}
                 className="w-full aspect-[4/3] object-cover" mirrored={true}
-                onUserMediaError={() => console.error('Camera access denied')} />
+                playsInline={true}
+                onUserMediaError={(err) => console.error('Camera error:', err)} />
             </div>
             <div className="space-y-3">
               <button onClick={() => captureNewEmployeePhoto()} className="btn-primary w-full flex items-center justify-center gap-2">
